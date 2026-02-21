@@ -1,0 +1,16 @@
+{
+  "name": "argus",
+  "version": "0.5.0",
+  "description": "Sentinelle omnisciente - Force l'IA à consulter le contexte historique et technique avant toute action",
+  "author": "Alane",
+  "repository": "https://github.com/Pamacea/argus",
+  "keywords": ["memory", "rag", "hooks", "context-aware", "mcp", "sentinel"],
+  "skills": "./skills/",
+  "commands": "./skills/",
+  "hooks": {
+    "SessionStart": "./hooks/session-start.js",
+    "PreToolUse": "./hooks/pre-tool-use.js",
+    "PostToolUse": "./hooks/post-tool-use.js",
+    "Stop": "./hooks/stop.js"
+  }
+}
