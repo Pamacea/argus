@@ -1,0 +1,38 @@
+{
+  "name": "argus-plugin",
+  "version": "1.0.0",
+  "description": "ARGUS - Sentinelle omnisciente pour Claude Code",
+  "author": "Alane",
+  "repository": "https://github.com/Pamacea/argus",
+  "license": "MIT",
+  "keywords": ["claude-code", "mcp", "rag", "memory", "hooks"],
+  "scripts": {
+    "postinstall": "node ../../scripts/install.js",
+    "build:mcp": "cd mcp && node build.js",
+    "dev": "nodemon --watch mcp/src --exec 'npm run build:mcp'",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint mcp/src hooks --ext .js,.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@qdrant/js-client-rest": "^1.12.0",
+    "node-rocksdb": "^6.0.0",
+    "uuid": "^9.0.1",
+    "chrono-node": "^2.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7",
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "argus-marketplace",
+  "owner": {
+    "name": "Alane",
+    "email": "alane@example.com"
+  },
+  "metadata": {
+    "description": "ARGUS - Sentinelle omnisciente pour Claude Code. Force l'IA à consulter le contexte historique et technique avant toute action.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "argus",
+      "source": "./plugins/argus",
+      "description": "Sentinelle omnisciente - Force l'IA à consulter le RAG, l'index et la documentation avant toute action Explore ou CreateTeam",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alane"
+      },
+      "keywords": ["memory", "rag", "hooks", "context-aware", "mcp", "sentinel", "explore", "create-team"],
+      "category": "productivity"
+    }
+  ]
+}
