@@ -312,10 +312,14 @@ export async function handleSearchCode(args: {
 export async function handleGetStats() {
   try {
     const ragStats = await rag.getStats();
+    const storageStats = await storage.getStats();
 
     return {
       success: true,
-      stats: ragStats
+      stats: {
+        ...ragStats,
+        ...storageStats
+      }
     };
   } catch (error) {
     return {

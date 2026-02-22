@@ -7,7 +7,6 @@
   "license": "MIT",
   "keywords": ["claude-code", "mcp", "rag", "memory", "hooks"],
   "scripts": {
-    "postinstall": "node ../../scripts/install.js",
     "build:mcp": "cd mcp && node build.js",
     "dev": "nodemon --watch mcp/src --exec 'npm run build:mcp'",
     "test": "vitest",
@@ -22,14 +21,14 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@qdrant/js-client-rest": "^1.12.0",
     "sql.js": "^1.12.0",
-    "uuid": "^9.0.1",
+    "uuid": "^11.0.3",
     "chrono-node": "^2.7.1"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/uuid": "^9.0.7",
-    "esbuild": "^0.19.11",
-    "typescript": "^5.3.3",
+    "@types/node": "^22.10.5",
+    "@types/uuid": "^10.0.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
     "vitest": "^1.2.0",
     "@vitest/coverage-v8": "^1.2.0",
     "nodemon": "^3.0.2",

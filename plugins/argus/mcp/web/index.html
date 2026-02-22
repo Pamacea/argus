@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARGUS - Sentinelle Omnisciente</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #111827;
+      --bg-card: #1f2937;
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-red: #ef4444;
+      --border-color: #374151;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+
+    .header .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border-radius: 2rem;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.healthy { background: var(--accent-green); }
+    .status-indicator.error { background: var(--accent-red); }
+    .status-indicator.indexing { background: var(--accent-yellow); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Grid Layout */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .grid-full {
+      grid-template-columns: 1fr;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .card-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      font-size: 1.2rem;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .card-content {
+      min-height: 100px;
+    }
+
+    /* Metrics */
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .metric:last-child {
+      border-bottom: none;
+    }
+
+    .metric-label {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    .metric-value {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .metric-value.success { color: var(--accent-green); }
+    .metric-value.warning { color: var(--accent-yellow); }
+    .metric-value.error { color: var(--accent-red); }
+
+    /* Progress Bar */
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* Project List */
+    .project-list {
+      list-style: none;
+    }
+
+    .project-item {
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .project-name {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .project-path {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-family: monospace;
+    }
+
+    .project-status {
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .project-status.indexed {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-green);
+    }
+
+    .project-status.pending {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent-yellow);
+    }
+
+    /* MCP Tools List */
+    .tool-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .tool-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+    }
+
+    .tool-name {
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .tool-status {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .tool-status.active {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-green);
+    }
+
+    /* Activity Log */
+    .activity-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .activity-item {
+      padding: 0.75rem;
+      border-left: 3px solid var(--accent-blue);
+      margin-bottom: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .activity-time {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+
+    .activity-message {
+      font-size: 0.95rem;
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error State */
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--accent-red);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .error-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Refresh Button */
+    .refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .refresh-btn:hover {
+      background: #2563eb;
+    }
+
+    .refresh-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 2rem 0;
+      border-top: 1px solid var(--border-color);
+      margin-top: 3rem;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .footer a {
+      color: var(--accent-blue);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>ARGUS</h1>
+      <p class="subtitle">Sentinelle Omnisciente - Context Awareness</p>
+      <div class="status-badge">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span id="statusText">Loading...</span>
+      </div>
+    </header>
+
+    <!-- Stats Overview -->
+    <div class="grid" id="statsGrid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <span class="card-title">Index Statistics</span>
+        </div>
+        <div class="card-content" id="indexStats">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🧠</span>
+          <span class="card-title">Memory Engine</span>
+        </div>
+        <div class="card-content" id="memoryStats">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🔧</span>
+          <span class="card-title">MCP Tools</span>
+        </div>
+        <div class="card-content" id="mcpTools">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Projects Section -->
+    <div class="grid grid-full">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📁</span>
+          <span class="card-title">Indexed Projects</span>
+          <button class="refresh-btn" onclick="refreshData()">
+            <span>🔄</span> Refresh
+          </button>
+        </div>
+        <div class="card-content">
+          <div id="projectsList" class="project-list">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="grid grid-full">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⚡</span>
+          <span class="card-title">Recent Activity</span>
+        </div>
+        <div class="card-content">
+          <div id="activityList" class="activity-list">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="grid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⚙️</span>
+          <span class="card-title">Server Info</span>
+        </div>
+        <div class="card-content" id="serverInfo">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🔗</span>
+          <span class="card-title">API Endpoints</span>
+        </div>
+        <div class="card-content">
+          <div class="metric">
+            <span class="metric-label">Health Check</span>
+            <a href="/health" style="color: var(--accent-blue);">/health</a>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Status API</span>
+            <a href="/api/status" style="color: var(--accent-blue);">/api/status</a>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Documentation</span>
+            <a href="/api/docs" style="color: var(--accent-blue);">/api/docs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p><strong>ARGUS</strong> v<span id="version">0.5.0</span> - Sentinelle Omnisciente pour Claude Code</p>
+      <p style="margin-top: 0.5rem;">
+        <a href="https://github.com/Pamacea/argus" target="_blank">GitHub</a> ·
+        <a href="/api/docs">API Documentation</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    // API base URL
+    const API_BASE = window.location.origin;
+
+    // Fetch stats from API
+    async function fetchStats() {
+      try {
+        const response = await fetch(`${API_BASE}/api/stats`);
+        if (!response.ok) throw new Error('Failed to fetch stats');
+        const data = await response.json();
+        // Return stats object, handling both formats
+        if (data.success && data.stats) {
+          return data.stats;
+        }
+        return data;
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        return null;
+      }
+    }
+
+    // Fetch server status
+    async function fetchServerStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/api/status`);
+        if (!response.ok) throw new Error('Failed to fetch status');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching server status:', error);
+        return null;
+      }
+    }
+
+    // Format bytes
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Format duration
+    function formatDuration(seconds) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m ${secs}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+      } else {
+        return `${secs}s`;
+      }
+    }
+
+    // Render index stats
+    function renderIndexStats(stats) {
+      if (!stats) {
+        return `<div class="error"><div class="error-icon">⚠️</div><p>Unable to load statistics</p></div>`;
+      }
+
+      const transactionCount = stats.transactionCount || stats.totalTransactions || 0;
+      const hookCount = stats.hookCount || stats.totalHooks || 0;
+      const fileCount = stats.indexedFileCount || 0;
+      const usingQdrant = stats.usingQdrant || false;
+
+      return `
+        <div class="metric">
+          <span class="metric-label">Storage Engine</span>
+          <span class="metric-value ${usingQdrant ? 'success' : 'warning'}">
+            ${usingQdrant ? 'Qdrant Vector' : 'SQLite Local'}
+          </span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Total Transactions</span>
+          <span class="metric-value">${transactionCount}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Active Hooks</span>
+          <span class="metric-value">${hookCount}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Indexed Files</span>
+          <span class="metric-value ${fileCount > 0 ? 'success' : 'warning'}">${fileCount || 'None'}</span>
+        </div>
+      `;
+    }
+
+    // Render memory stats
+    function renderMemoryStats(stats) {
+      const usingQdrant = stats.usingQdrant || false;
+      const memorySize = stats.memorySize || 0;
+      const lastIndexTime = stats.lastIndexTime || 0;
+
+      return `
+        <div class="metric">
+          <span class="metric-label">Engine Status</span>
+          <span class="metric-value ${usingQdrant ? 'success' : 'warning'}">
+            ${usingQdrant ? 'Vector Search' : 'Local Search'}
+          </span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Database Size</span>
+          <span class="metric-value">${formatBytes(memorySize)}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Last Index</span>
+          <span class="metric-value">${lastIndexTime ? new Date(lastIndexTime).toLocaleString() : 'Never'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">System Status</span>
+          <span class="metric-value success">Operational</span>
+        </div>
+      `;
+    }
+
+    // Render MCP tools
+    function renderMCPTools() {
+      const tools = [
+        { name: 'argus__check_hooks', description: 'Check hooks before operations' },
+        { name: 'argus__search_memory', description: 'Semantic search in transactions' },
+        { name: 'argus__save_transaction', description: 'Save results to memory' },
+        { name: 'argus__get_history', description: 'Get transaction history' },
+        { name: 'argus__index_codebase', description: 'Index project files' },
+        { name: 'argus__search_code', description: 'Search indexed code' }
+      ];
+
+      return `
+        <div class="tool-list">
+          ${tools.map(tool => `
+            <div class="tool-item">
+              <span class="tool-name">${tool.name}</span>
+              <span class="tool-status active">Active</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // Render projects list
+    function renderProjects() {
+      // Sample data - in real implementation, this would come from API
+      const projects = [
+        {
+          name: 'ARGUS Plugin',
+          path: 'C:/Users/Yanis/Projects/-plugins/argus',
+          status: 'indexed',
+          fileCount: 42
+        }
+      ];
+
+      if (projects.length === 0) {
+        return `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>No projects indexed yet.</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem;">
+              Use the MCP tool <code>argus__index_codebase</code> to index your projects.
+            </p>
+          </div>
+        `;
+      }
+
+      return `
+        <ul class="project-list">
+          ${projects.map(project => `
+            <li class="project-item">
+              <div>
+                <div class="project-name">${project.name}</div>
+                <div class="project-path">${project.path}</div>
+              </div>
+              <span class="project-status ${project.status}">
+                ${project.status === 'indexed' ? '✓ Indexed' : '⏳ Pending'}
+              </span>
+            </li>
+          `).join('')}
+        </ul>
+      `;
+    }
+
+    // Render activity
+    function renderActivity() {
+      // Sample activity - in real implementation, fetch from API
+      const activities = [
+        {
+          time: new Date(),
+          message: 'ARGUS plugin initialized successfully'
+        },
+        {
+          time: new Date(Date.now() - 60000),
+          message: 'Web dashboard started on port 30000'
+        },
+        {
+          time: new Date(Date.now() - 120000),
+          message: 'MCP server connected'
+        }
+      ];
+
+      return activities.map(activity => `
+        <div class="activity-item">
+          <div class="activity-time">${formatDuration((Date.now() - activity.getTime()) / 1000)} ago</div>
+          <div class="activity-message">${activity.message}</div>
+        </div>
+      `).join('');
+    }
+
+    // Render server info
+    function renderServerInfo(status) {
+      if (!status) {
+        return `<div class="error"><p>Unable to load server info</p></div>`;
+      }
+
+      return `
+        <div class="metric">
+          <span class="metric-label">Version</span>
+          <span class="metric-value">${status.version || '0.5.0'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Platform</span>
+          <span class="metric-value">${status.server?.platform || 'Unknown'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Node.js</span>
+          <span class="metric-value">${status.server?.nodeVersion || 'Unknown'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Uptime</span>
+          <span class="metric-value">${formatDuration(status.server?.uptime || 0)}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Process ID</span>
+          <span class="metric-value">${status.server?.pid || 'N/A'}</span>
+        </div>
+      `;
+    }
+
+    // Update status indicator
+    function updateStatus(isHealthy) {
+      const indicator = document.getElementById('statusIndicator');
+      const text = document.getElementById('statusText');
+
+      if (isHealthy) {
+        indicator.className = 'status-indicator healthy';
+        text.textContent = 'All Systems Operational';
+      } else {
+        indicator.className = 'status-indicator error';
+        text.textContent = 'System Degraded';
+      }
+    }
+
+    // Load all data
+    async function loadData() {
+      const [stats, status] = await Promise.all([
+        fetchStats(),
+        fetchServerStatus()
+      ]);
+
+      // Update UI
+      document.getElementById('indexStats').innerHTML = renderIndexStats(stats);
+      document.getElementById('memoryStats').innerHTML = renderMemoryStats(stats);
+      document.getElementById('mcpTools').innerHTML = renderMCPTools();
+      document.getElementById('projectsList').innerHTML = renderProjects();
+      document.getElementById('activityList').innerHTML = renderActivity();
+      document.getElementById('serverInfo').innerHTML = renderServerInfo(status);
+
+      // Update status
+      updateStatus(stats !== null || status !== null);
+    }
+
+    // Refresh data
+    function refreshData() {
+      const btn = document.querySelector('.refresh-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span>🔄</span> Refreshing...';
+
+      loadData().finally(() => {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<span>🔄</span> Refresh';
+        }, 500);
+      });
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+
+      // Auto-refresh every 30 seconds
+      setInterval(loadData, 30000);
+    });
+  </script>
+</body>
+</html>

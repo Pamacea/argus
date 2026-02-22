@@ -472,6 +472,103 @@ export class Storage {
   }
 
   /**
+   * Get statistics summary for the web dashboard
+   */
+  async getStats(): Promise<{
+    transactionCount: number;
+    hookCount: number;
+    indexedFileCount: number;
+    memorySize: number;
+    lastIndexTime: number;
+  }> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      return {
+        transactionCount: 0,
+        hookCount: 0,
+        indexedFileCount: 0,
+        memorySize: 0,
+        lastIndexTime: 0
+      };
+    }
+
+    // Get transaction count
+    let transactionCount = 0;
+    try {
+      const txStmt = this.db.prepare(`SELECT COUNT(*) as count FROM transactions`);
+      if (txStmt.step()) {
+        transactionCount = txStmt.getAsObject({ count: 0 }).count as number;
+      }
+      txStmt.free();
+    } catch (e) {
+      // Ignore error
+    }
+
+    // Get hook count
+    let hookCount = 0;
+    try {
+      const hookStmt = this.db.prepare(`SELECT COUNT(*) as count FROM hooks`);
+      if (hookStmt.step()) {
+        hookCount = hookStmt.getAsObject({ count: 0 }).count as number;
+      }
+      hookStmt.free();
+    } catch (e) {
+      // Ignore error
+    }
+
+    // Get indexed file count and last index time
+    let indexedFileCount = 0;
+    let lastIndexTime = 0;
+    try {
+      const fileStmt = this.db.prepare(`
+        SELECT COUNT(*) as count, MAX(indexed_at) as last_indexed
+        FROM indexed_files
+      `);
+      if (fileStmt.step()) {
+        const result = fileStmt.getAsObject({ count: 0, last_indexed: 0 });
+        indexedFileCount = result.count as number;
+        lastIndexTime = result.last_indexed as number || 0;
+      }
+      fileStmt.free();
+    } catch (e) {
+      // Ignore error
+    }
+
+    // Calculate memory size (database file size)
+    let memorySize = 0;
+    try {
+      const stats = fs.statSync(this.dbPath);
+      memorySize = stats.size;
+    } catch (e) {
+      // Ignore error
+    }
+
+    // Write stats to JSON file for web dashboard
+    try {
+      const statsPath = path.join(path.dirname(this.dbPath), 'stats.json');
+      const statsData = {
+        transactionCount,
+        hookCount,
+        indexedFileCount,
+        memorySize,
+        lastIndexTime,
+        lastUpdated: Date.now()
+      };
+      fs.writeFileSync(statsPath, JSON.stringify(statsData, null, 2));
+    } catch (e) {
+      console.warn('[ARGUS] Failed to write stats file:', e);
+    }
+
+    return {
+      transactionCount,
+      hookCount,
+      indexedFileCount,
+      memorySize,
+      lastIndexTime
+    };
+  }
+
+  /**
    * Close database connection
    */
   close(): void {

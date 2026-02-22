@@ -165,6 +165,12 @@ async function handleRequest(req, res) {
       endpoints: [
         {
           method: 'GET',
+          path: '/',
+          description: 'Web dashboard HTML interface',
+          response: 'HTML page with dashboard UI'
+        },
+        {
+          method: 'GET',
           path: '/health',
           description: 'Health check endpoint',
           response: {
@@ -193,6 +199,22 @@ async function handleRequest(req, res) {
         },
         {
           method: 'GET',
+          path: '/api/stats',
+          description: 'Get ARGUS statistics (transactions, hooks, indexing)',
+          response: {
+            success: true,
+            stats: {
+              usingQdrant: 'boolean',
+              transactionCount: 'number',
+              hookCount: 'number',
+              indexedFileCount: 'number',
+              memorySize: 'bytes',
+              lastIndexTime: 'ISO 8601 timestamp'
+            }
+          }
+        },
+        {
+          method: 'GET',
           path: '/api/docs',
           description: 'API documentation'
         }
@@ -201,19 +223,58 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // Root endpoint - simple welcome page
-  if (url.pathname === '/' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      name: 'ARGUS Web Dashboard',
-      message: 'ARGUS - Sentinelle Omnisciente',
-      status: 'running',
-      links: {
-        health: '/health',
-        status: '/api/status',
-        docs: '/api/docs'
+  // Stats endpoint - get ARGUS statistics
+  if (url.pathname === '/api/stats' && req.method === 'GET') {
+    try {
+      // Try to read stats from the data directory
+      const statsPath = join(DATA_DIR, 'stats.json');
+      let stats = { usingQdrant: false, transactionCount: 0, hookCount: 0 };
+
+      if (existsSync(statsPath)) {
+        try {
+          const statsData = readFileSync(statsPath, 'utf-8');
+          stats = JSON.parse(statsData);
+        } catch (e) {
+          // Use default stats if file is corrupted
+        }
       }
-    }, null, 2));
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        stats: stats
+      }, null, 2));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: error.message
+      }, null, 2));
+    }
+    return;
+  }
+
+  // Root endpoint - serve HTML dashboard
+  if (url.pathname === '/' && req.method === 'GET') {
+    const indexPath = join(__dirname, 'index.html');
+    if (existsSync(indexPath)) {
+      const html = readFileSync(indexPath, 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        name: 'ARGUS Web Dashboard',
+        message: 'ARGUS - Sentinelle Omnisciente',
+        status: 'running',
+        links: {
+          health: '/health',
+          status: '/api/status',
+          stats: '/api/stats',
+          docs: '/api/docs'
+        }
+      }, null, 2));
+    }
     return;
   }
 
@@ -222,7 +283,7 @@ async function handleRequest(req, res) {
   res.end(JSON.stringify({
     error: 'Not Found',
     path: url.pathname,
-    available: ['/', '/health', '/api/status', '/api/docs']
+    available: ['/', '/health', '/api/status', '/api/stats', '/api/docs']
   }, null, 2));
 }
 
@@ -251,9 +312,10 @@ async function start() {
     console.log('[ARGUS] ════════════════════════════════════════════');
     console.log('[ARGUS] Web Dashboard Server Started');
     console.log('[ARGUS] ════════════════════════════════════════════');
-    console.log(`[ARGUS] URL:        http://${HOST}:${PORT}`);
+    console.log(`[ARGUS] Dashboard: http://${HOST}:${PORT}/`);
     console.log(`[ARGUS] Health:     http://${HOST}:${PORT}/health`);
     console.log(`[ARGUS] Status:     http://${HOST}:${PORT}/api/status`);
+    console.log(`[ARGUS] Stats:      http://${HOST}:${PORT}/api/stats`);
     console.log(`[ARGUS] Docs:       http://${HOST}:${PORT}/api/docs`);
     console.log(`[ARGUS] PID:        ${process.pid}`);
     console.log('[ARGUS] ════════════════════════════════════════════');
