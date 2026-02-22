@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "argus": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"],
+      "env": {
+        "ARGUS_DATA_DIR": "${CLAUDE_DATA_DIR}/argus",
+        "ARGUS_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
