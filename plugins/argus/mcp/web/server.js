@@ -398,6 +398,103 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Transactions endpoint - get transaction history
+  if (url.pathname === '/api/transactions' && req.method === 'GET') {
+    try {
+      const urlParams = new URLSearchParams(url.search);
+      const limit = parseInt(urlParams.get('limit')) || 50;
+      const offset = parseInt(urlParams.get('offset')) || 0;
+
+      // Read from transaction log files
+      import('fs').then(({ readdirSync, readFileSync, existsSync }) => {
+        const transactions = [];
+        const logDir = join(DATA_DIR, 'queue');
+        const transactionLog = join(logDir, 'transactions.jsonl');
+
+        if (existsSync(transactionLog)) {
+          try {
+            const content = readFileSync(transactionLog, 'utf-8');
+            const lines = content.trim().split('\n').filter(l => l);
+
+            // Parse all transactions
+            for (const line of lines) {
+              try {
+                const data = JSON.parse(line);
+                // Convert queue format to transaction format
+                const prompt = data.prompt || 'No prompt';
+                const response = data.result?.output || '';
+                const category = data.metadata?.category || 'general';
+                const tags = data.metadata?.tags || [];
+
+                // Create more readable prompt
+                let readablePrompt = prompt;
+                if (prompt.includes(' called')) {
+                  // Extract tool name and arguments
+                  readablePrompt = prompt.replace(' called', '');
+                }
+
+                // Format response for better display
+                let formattedResponse = response;
+                if (response && response.length > 200) {
+                  formattedResponse = response.substring(0, 200) + '...';
+                }
+
+                transactions.push({
+                  id: data.id || `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  timestamp: data.timestamp || Date.now(),
+                  sessionId: data.context?.cwd || 'unknown',
+                  prompt: readablePrompt,
+                  promptType: data.promptType || 'tool',
+                  response: formattedResponse,
+                  success: data.result?.success ?? true,
+                  duration: data.result?.duration || 0,
+                  category: category,
+                  tags: tags,
+                  // Add extra context for display
+                  toolName: tags[0] || 'unknown',
+                  isFileEdit: category === 'file_modification'
+                });
+              } catch (e) {
+                // Skip malformed lines
+              }
+            }
+          } catch (e) {
+            console.error('[ARGUS Web] Error reading transaction log:', e);
+          }
+        }
+
+        // Sort by timestamp descending
+        transactions.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Apply pagination
+        const total = transactions.length;
+        const paginated = transactions.slice(offset, offset + limit);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          transactions: paginated,
+          total,
+          limit,
+          offset
+        }, null, 2));
+      }).catch(error => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: error.message
+        }, null, 2));
+      });
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: error.message
+      }, null, 2));
+    }
+    return;
+  }
+
   // Root endpoint - serve HTML dashboard
   if (url.pathname === '/' && req.method === 'GET') {
     const indexPath = join(__dirname, 'index.html');

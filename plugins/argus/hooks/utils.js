@@ -6,15 +6,17 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Session state file path
-const SESSION_STATE_PATH = path.join(process.env.CLAUDE_PLUGIN_ROOT, '.session-state.json');
-
 // Use absolute path for data directory
 const ARGUS_HOME = path.join(os.homedir(), '.argus');
 const QUEUE_DIR = path.join(ARGUS_HOME, 'queue');
 const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.jsonl');
 const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.jsonl');
 const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.jsonl');
+
+// Session state file path (with fallback)
+const SESSION_STATE_PATH = process.env.CLAUDE_PLUGIN_ROOT
+  ? path.join(process.env.CLAUDE_PLUGIN_ROOT, '.session-state.json')
+  : path.join(ARGUS_HOME, '.session-state.json');
 
 /**
  * Ensure queue directory exists
@@ -63,15 +65,6 @@ function clearQueue(filePath) {
     }
   } catch (error) {
     console.error(`[ARGUS] Failed to clear queue ${filePath}:`, error.message);
-  }
-}
-function ensureQueueDir() {
-  try {
-    if (!fs.existsSync(QUEUE_DIR)) {
-      fs.mkdirSync(QUEUE_DIR, { recursive: true });
-    }
-  } catch (error) {
-    console.error('[ARGUS] Failed to create queue dir:', error.message);
   }
 }
 

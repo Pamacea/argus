@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.5 | **License:** MIT
+**Version:** 0.5.6 | **License:** MIT
 
 ---
 
@@ -14,17 +14,28 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.5)
+## ✨ Key Features (v0.5.6)
 
-### 🐛 Critical Bug Fixes
-- **Search Memory Fixed** - No more `TypeError: allTransactions.map is not a function`
-- **Queue System Fixed** - JSONL format for reliable persistence
-- **Dashboard Stats Fixed** - Shows real data from database
+### 🎨 Complete Dashboard Redesign
+- **New Sidebar Navigation** - Clean left sidebar with icons for all sections
+- **Vercel-Inspired Design** - Black/white/gray palette with subtle blue accents
+- **No More Cards** - Clean separators and visual hierarchy
+- **Enhanced UX** - Better organization and information architecture
 
-### 🚀 New Features
-- **Queue Processor** - Auto-processes queued items every 5 seconds
-- **Prompt/Response Capture** - Complete conversation history (Claude-mem style)
-- **Transaction Indexing** - Automatic indexing for semantic search
+### 🔧 New Features
+- **Transaction Search** - Search through all transactions by keyword
+- **History Pagination** - Browse history 10 items at a time
+- **Auto-Refresh** - Dashboard updates every 30 seconds automatically
+- **New API Endpoint** - `/api/transactions` for fetching history with pagination
+
+### 📊 Dashboard Sections
+- **Overview** - Index statistics at a glance
+- **Recent Activity** - Live feed of recent transactions
+- **History/Log** - Complete searchable transaction history
+- **Memory Engine** - Storage and search engine status
+- **MCP Tools** - List of all available MCP tools
+- **Server Endpoints** - Server information and process details
+- **API Documentation** - Complete API reference
 
 ### 🔍 Dual-Mode Semantic Search
 - **Local Search (TF-IDF)** - Works without Docker, zero external dependencies

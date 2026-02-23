@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.6] - 2026-02-23
+
+### 🎨 UI/UX Improvements
+
+#### Complete Dashboard Redesign
+- **New navigation** : Left sidebar with icons for all sections
+- **Vercel-inspired design** : Black/white/gray color palette with subtle blue accents
+- **No more cards** : Clean separators instead of card-based layout
+- **Better organization** : Sections clearly separated with visual hierarchy
+
+#### New Sections
+- **Overview** : Dashboard with index statistics at a glance
+- **Recent Activity** : Live feed of recent transactions
+- **History/Log** : Complete transaction history with pagination
+- **Memory Engine** : Detailed storage and search engine status
+- **MCP Tools** : List of all available MCP tools
+- **Server Endpoints** : Server information and process details
+- **API Documentation** : Complete API reference
+
+#### Enhanced Features
+- **Transaction search** : Search through all transactions by keyword
+- **Pagination** : Browse history with page navigation (10 per page)
+- **Auto-refresh** : Dashboard auto-refreshes every 30 seconds
+- **Responsive design** : Mobile-friendly sidebar navigation
+
+### 🔧 API Improvements
+
+#### New Endpoints
+- **GET /api/transactions** : Fetch transaction history with pagination
+  - Query params: `limit` (default: 50), `offset` (default: 0)
+  - Returns: transactions array with prompt/response data
+  - Supports: full-text search, filtering by tags/category
+
+### 📝 Technical Details
+
+**Modified Files:**
+- `mcp/web/index.html` - Complete redesign with sidebar navigation
+- `mcp/web/server.js` - Added /api/transactions endpoint
+- `CHANGELOG.md` - Updated for v0.5.6
+- `README.md` - Updated with new dashboard screenshots
+- `plugins/argus/.claude-plugin/plugin.json` - Updated version to 0.5.6
+- `plugins/argus/.claude-plugin/marketplace.json` - Updated version to 0.5.6
+
+---
+
 ## [0.5.5] - 2026-02-23
 
 ### 🐛 Bug Fixes

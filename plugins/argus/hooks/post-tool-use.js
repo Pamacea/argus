@@ -23,9 +23,26 @@ async function postToolUse(toolName, args, result) {
   }
 
   try {
+    // Create a more descriptive prompt from the tool call
+    let promptContent = `${toolName} called`;
+
+    // Include relevant arguments in the prompt
+    if (args && Object.keys(args).length > 0) {
+      const argSummary = Object.keys(args).slice(0, 3).map(key => {
+        const value = args[key];
+        if (typeof value === 'string') {
+          return `${key}="${value.substring(0, 50)}${value.length > 50 ? '...' : ''}"`;
+        } else if (typeof value === 'object' && value !== null) {
+          return `${key}=<object>`;
+        }
+        return `${key}=${value}`;
+      }).join(', ');
+      promptContent += ` with ${argSummary}`;
+    }
+
     // Queue transaction for processing by MCP server
     queueTransaction({
-      prompt: `${toolName} called`,
+      prompt: promptContent,
       promptType: 'tool',
       context: {
         cwd: process.cwd(),
@@ -35,7 +52,7 @@ async function postToolUse(toolName, args, result) {
       },
       result: {
         success: true,
-        output: typeof result === 'string' ? result : JSON.stringify(result),
+        output: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
         duration: 0,
         toolsUsed: [toolName]
       },
@@ -57,13 +74,28 @@ async function postToolUse(toolName, args, result) {
 (async () => {
   try {
     const toolName = process.env.ARGUS_TOOL_NAME || 'unknown';
-    const args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
-    const result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
+    let args = {};
+    let result = {};
+
+    // Parse args safely
+    try {
+      args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+    } catch (e) {
+      console.error('[ARGUS] Failed to parse args:', e.message);
+    }
+
+    // Parse result safely - might not be JSON
+    try {
+      result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
+    } catch (e) {
+      // Result might not be JSON, use as-is
+      result = { output: process.env.ARGUS_TOOL_RESULT || '' };
+    }
 
     await postToolUse(toolName, args, result);
     process.exit(0);
   } catch (error) {
-    console.error('[ARGUS] Error in post-tool-use hook:', error);
+    console.error('[ARGUS] Error in post-tool-use hook:', error.message);
     process.exit(0); // Don't fail the hook
   }
 })();

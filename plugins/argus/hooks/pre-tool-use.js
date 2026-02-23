@@ -107,7 +107,14 @@ This ensures you don't duplicate work and follow established patterns.
 (async () => {
   try {
     const toolName = process.env.ARGUS_TOOL_NAME || 'unknown';
-    const args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+    let args = {};
+
+    // Parse args safely
+    try {
+      args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+    } catch (e) {
+      console.error('[ARGUS] Failed to parse args:', e.message);
+    }
 
     const result = await preToolUse(toolName, args);
 
@@ -120,7 +127,7 @@ This ensures you don't duplicate work and follow established patterns.
       process.exit(0);
     }
   } catch (error) {
-    console.error('[ARGUS] Error in pre-tool-use hook:', error);
+    console.error('[ARGUS] Error in pre-tool-use hook:', error.message);
     process.exit(0); // Don't block on error
   }
 })();

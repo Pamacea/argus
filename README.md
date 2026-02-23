@@ -1,6 +1,6 @@
 # ARGUS Marketplace
 
-> **v0.5.5** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action.
+> **v0.5.6** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action.
 
 ## 📦 Plugins
 
@@ -13,6 +13,21 @@ Le plugin ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur ave
 - ✅ Historique des conversations (style Claude-mem)
 - ✅ Documentation du projet
 - ✅ Visualisation des projets indexés
+- ✅ **NOUVEAU** : Dashboard redesign avec sidebar navigation
+
+## 🆕 v0.5.6 Nouveautés
+
+### 🎨 Dashboard Complètement Repensé
+- **Nouvelle navigation** : Barre latérale avec icônes pour toutes les sections
+- **Design Vercel-inspired** : Palette noir/blanc/gris avec accents bleus subtils
+- **Plus de cartes** : Séparateurs propres et organisation claire
+- **Sections** : Overview, Recent Activity, History/Log, Memory Engine, MCP Tools, Server Endpoints, API Docs
+
+### 🔧 Nouvelles Fonctionnalités
+- **Transaction Search** : Recherchez dans toutes vos transactions
+- **Pagination** : Navigation dans l'historique (10 par page)
+- **Auto-refresh** : Dashboard se rafraîchit toutes les 30 secondes
+- **/api/transactions** : Nouveau endpoint pour l'historique complet
 
 ## 🆕 v0.5.5 Nouveautés
 
