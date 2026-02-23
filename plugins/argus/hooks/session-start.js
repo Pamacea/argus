@@ -287,6 +287,60 @@ async function ensureWebDashboard(pluginRoot) {
   }
 }
 
+/**
+ * Start queue processor in background
+ */
+async function startQueueProcessor(pluginRoot) {
+  const queueProcessorPath = path.join(pluginRoot, 'hooks', 'process-queue.js');
+
+  if (!fs.existsSync(queueProcessorPath)) {
+    console.warn('[ARGUS] ⚠ Queue processor not found, transaction processing disabled');
+    return;
+  }
+
+  const isWindows = process.platform === 'win32';
+
+  if (isWindows) {
+    // On Windows, use spawn with DETACHED_PROCESS flag
+    const { spawn } = require('child_process');
+    const command = spawn('node', [queueProcessorPath], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ARGUS_DATA_DIR: process.env.ARGUS_DATA_DIR || path.join(require('os').homedir(), '.argus')
+      }
+    });
+
+    command.on('error', (error) => {
+      console.error('[ARGUS] ✗ Failed to start queue processor:', error.message);
+    });
+
+    // Unref to allow parent to exit
+    command.unref();
+    console.log('[ARGUS] ✓ Queue processor started in background...');
+  } else {
+    // Unix: use detached spawn
+    const { spawn } = require('child_process');
+    const command = spawn('node', [queueProcessorPath], {
+      detached: true,
+      stdio: ['ignore', 'ignore', 'ignore'],
+      env: {
+        ...process.env,
+        ARGUS_DATA_DIR: process.env.ARGUS_DATA_DIR || path.join(require('os').homedir(), '.argus')
+      }
+    });
+
+    command.on('error', (error) => {
+      console.error('[ARGUS] ✗ Failed to start queue processor:', error.message);
+    });
+
+    command.unref();
+    console.log('[ARGUS] ✓ Queue processor started in background...');
+  }
+}
+
 async function sessionStart() {
   console.log('[ARGUS] Initializing...');
   console.log('[ARGUS] ════════════════════════════════════════════');
@@ -354,6 +408,9 @@ async function sessionStart() {
   // Auto-index current project if in a valid project directory
   const cwd = process.env.CLAUDE_SESSION_CWD || process.cwd();
   await autoIndexProject(cwd, pluginRoot);
+
+  // Start queue processor in background to process queued transactions
+  await startQueueProcessor(pluginRoot);
 
   console.log('[ARGUS] ════════════════════════════════════════════');
   console.log('[ARGUS] Ready to guide your actions!');
