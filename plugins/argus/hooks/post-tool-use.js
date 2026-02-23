@@ -100,6 +100,9 @@ async function postToolUse(toolName, args, result) {
   }
 
   try {
+    // Load current context to get user's goal
+    const context = loadContext();
+
     // Generate intelligent summary
     let summary = generateSummary(toolName, args);
     const intent = inferIntent(toolName, args);
@@ -111,8 +114,18 @@ async function postToolUse(toolName, args, result) {
       trackCommand(args.command, args.description);
     }
 
-    // Enhance summary with task context
+    // Enhance summary with task context AND user goal
     summary = getEnhancedSummary(toolName, args, summary);
+
+    // If we have user context, create even better summary
+    if (context.userPrompt && context.userGoal) {
+      // Create a summary that connects action → goal
+      const actionDesc = summary;
+      const goalDesc = context.userGoal;
+
+      // Format: "Doing X (to accomplish Y)"
+      summary = `${actionDesc} (to ${goalDesc})`;
+    }
 
     // Create a more descriptive prompt from the tool call
     let promptContent = summary;

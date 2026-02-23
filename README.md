@@ -1,6 +1,6 @@
 # ARGUS Marketplace
 
-> **v0.5.6** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action.
+> **v0.5.9** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action avec résumés intelligents.
 
 ## 📦 Plugins
 

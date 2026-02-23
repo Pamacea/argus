@@ -863,6 +863,9 @@
             </svg>
             Recent Activity
           </h2>
+          <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 400; margin-top: 0.25rem;">
+            Quick overview of recent actions with context
+          </div>
         </div>
         <div id="activityContent">
           <div class="loading"><div class="spinner"></div></div>
@@ -876,8 +879,11 @@
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
-            Transaction History
+            Complete Transaction Log
           </h2>
+          <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 400; margin-top: 0.25rem;">
+            Full transaction history with all details
+          </div>
         </div>
 
         <div class="search-box">
@@ -1106,32 +1112,77 @@
       const timeAgo = getTimeAgo(tx.timestamp);
 
       if (tx.category === 'file_modification' || tx.isFileEdit) {
-        // File modification summary
+        // File modification summary - ULTRA SHORT
         if (tx.prompt.includes('Edit')) {
           const match = tx.prompt.match(/Edit (.+?):/);
-          const file = match ? match[1] : 'a file';
+          const file = match ? match[1].split(/[/\\]/).pop() : 'a file';
+
+          // Extract the WHY part (to ...) if present
+          const whyMatch = tx.prompt.match(/\(to (.+?)\)/);
+          const why = whyMatch ? whyMatch[1] : 'working on task';
+
+          // Ultra short: "Modified X (to Y)"
           return {
             icon: '📝',
-            title: `Modified ${file.split(/[/\\]/).pop()}`,
-            description: tx.prompt.substring(0, 100) + '...',
+            title: `Modified ${file}`,
+            description: why.length > 40 ? why.substring(0, 40) + '...' : why,
             time: timeAgo
           };
         } else if (tx.prompt.includes('Write')) {
           const match = tx.prompt.match(/Write (.+?) \(/);
-          const file = match ? match[1] : 'a file';
+          const file = match ? match[1].split(/[/\\]/).pop() : 'a file';
+
+          // Extract the WHY part (to ...) if present
+          const whyMatch = tx.prompt.match(/\(to (.+?)\)/);
+          const why = whyMatch ? whyMatch[1] : 'working on task';
+
+          // Ultra short: "Created X (to Y)"
           return {
             icon: '✨',
-            title: `Created ${file.split(/[/\\]/).pop()}`,
-            description: tx.prompt.substring(0, 100) + '...',
+            title: `Created ${file}`,
+            description: why.length > 40 ? why.substring(0, 40) + '...' : why,
             time: timeAgo
           };
         }
       }
 
-      // Tool execution summary
+      // Tool execution summary - ULTRA SHORT
       switch(toolName) {
         case 'Bash':
-          const cmdMatch = tx.prompt.match(/command="([^"]+)"/);
+          // Extract description from prompt
+          const descMatch = tx.prompt.match(/Executed: (.+?)(?:\(|$)/);
+          if (descMatch) {
+            const desc = descMatch[1];
+            return {
+              icon: '⚡',
+              title: 'Ran command',
+              description: desc.length > 50 ? desc.substring(0, 50) + '...' : desc,
+              time: timeAgo
+            };
+          }
+          break;
+        case 'Task':
+          const descMatch = tx.prompt.match(/Launched (.+?) agent: (.+)/);
+          if (descMatch) {
+            return {
+              icon: '🤖',
+              title: `Used ${descMatch[1]} agent`,
+              description: descMatch[2].length > 50 ? descMatch[2].substring(0, 50) + '...' : descMatch[2],
+              time: timeAgo
+            };
+          }
+          break;
+      }
+
+      // Fallback - use first 60 chars of prompt
+      const prompt = tx.prompt || 'Unknown action';
+      return {
+        icon: '🔧',
+        title: toolName,
+        description: prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt,
+        time: timeAgo
+      };
+    }
           const cmd = cmdMatch ? cmdMatch[1] : 'command';
           return {
             icon: '⚡',

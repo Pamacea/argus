@@ -146,26 +146,88 @@ function trackCommand(command, description) {
 
 /**
  * Get enhanced summary for a tool action
+ * INFERS CONTEXT FROM RECENT ACTIONS
  */
 function getEnhancedSummary(toolName, args, baseSummary) {
   const context = loadContext();
 
-  // Add context to summary if available
-  if (context.task && context.userPrompt) {
-    const taskDesc = {
-      'feature_development': 'Building feature',
-      'bug_fixing': 'Fixing bug',
-      'refactoring': 'Refactoring code',
-      'testing': 'Testing',
-      'documentation': 'Writing docs',
-      'setup': 'Setting up',
-      'general_task': 'Working on task'
-    }[context.task] || 'Working';
+  // Infer goal from recent file patterns
+  const inferredGoal = inferGoalFromHistory(context);
 
-    return `${taskDesc}: ${baseSummary}`;
+  if (inferredGoal) {
+    // Format: "Doing X (to accomplish Y)"
+    return `${baseSummary} (to ${inferredGoal})`;
   }
 
+  // Fallback: just the base summary
   return baseSummary;
+}
+
+/**
+ * Infer user's goal from recent file modifications
+ */
+function inferGoalFromHistory(context) {
+  if (!context.filesModified || context.filesModified.length === 0) {
+    return null;
+  }
+
+  const recentFiles = context.filesModified.slice(-5); // Last 5 files
+  const filenames = recentFiles.map(f => f.path.split(/[\\/]/).pop().toLowerCase());
+
+  // Pattern matching to infer intent
+  if (filenames.some(f => f.includes('test') || f.includes('spec'))) {
+    return 'test functionality';
+  }
+  if (filenames.some(f => f.includes('readme') || f.includes('doc') || f.includes('guide'))) {
+    return 'update documentation';
+  }
+  if (filenames.some(f => f.includes('example') || f.includes('demo') || f.includes('sample'))) {
+    return 'demonstrate feature';
+  }
+  if (filenames.some(f => f.includes('config') || f.includes('setup') || f.includes('install'))) {
+    return 'configure system';
+  }
+  if (filenames.some(f => f.includes('fix') || f.includes('bug') || f.includes('patch'))) {
+    return 'fix issues';
+  }
+
+  // Count operations to detect patterns
+  const writeCount = recentFiles.filter(f => f.operation === 'write').length;
+  const editCount = recentFiles.filter(f => f.operation === 'edit').length;
+
+  if (writeCount >= 3) {
+    return 'create new feature';
+  }
+  if (editCount >= 3) {
+    return 'refactor code';
+  }
+
+  return null;
+}
+
+/**
+ * Extract user's goal from prompt (WHY they want to do this)
+ */
+function extractUserGoal(prompt) {
+  // Remove common prefixes to get the core goal
+  const prefixes = [
+    /^can you /i,
+    /^could you /i,
+    /^please /i,
+    /^i need /i,
+    /^i want /i,
+    /^help me /i,
+    /^let's /i
+  ];
+
+  let cleaned = prompt;
+  for (const prefix of prefixes) {
+    cleaned = cleaned.replace(prefix, '');
+  }
+
+  // Take first meaningful part
+  const firstSentence = cleaned.split(/[.!?]/)[0];
+  return firstSentence.trim();
 }
 
 module.exports = {
@@ -176,5 +238,6 @@ module.exports = {
   trackFileModification,
   trackCommand,
   getEnhancedSummary,
-  extractTask
+  extractTask,
+  extractUserGoal
 };

@@ -11,30 +11,50 @@ async function prePrompt(prompt, context) {
   console.log('[ARGUS] Capturing user prompt...');
 
   try {
-    // Extract task and update context
+    // Extract task and user goal
     const task = extractTask(prompt);
+    const userGoal = extractUserGoal(prompt);
+
+    // Update context with FULL prompt and extracted goal
     updateTaskContext(prompt, task);
+
+    // Also save the user goal for better summaries
+    const contextTracker = require('./context-tracker');
+    const currentCtx = contextTracker.loadContext();
+    currentCtx.userGoal = userGoal;
+    contextTracker.saveContext();
 
     // Queue the prompt for storage
     queuePrompt({
       prompt: prompt.substring(0, 10000), // Limit to 10k chars
+      userGoal: userGoal,  // Store extracted goal
       context: {
         cwd: process.cwd(),
         platform: process.platform,
         timestamp: Date.now(),
-        task: task
+        task: task,
+        userGoal: userGoal
       },
       metadata: {
         type: 'user_prompt',
         length: prompt.length,
-        task: task
+        task: task,
+        userGoal: userGoal
       }
     });
 
-    console.log(`[ARGUS] ✓ Task: ${task} - Prompt queued`);
+    console.log(`[ARGUS] ✓ Task: ${task} - Goal: "${userGoal}"`);
   } catch (error) {
     console.error('[ARGUS] Warning: Could not queue prompt:', error.message);
   }
+}
+
+/**
+ * Extract user's main goal from prompt
+ */
+function extractUserGoal(prompt) {
+  const { extractUserGoal } = require('./context-tracker');
+  return extractUserGoal(prompt);
 }
 
 // Main execution - Read from stdin as per Claude Code hooks spec
