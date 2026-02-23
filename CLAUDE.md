@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.10 | **License:** MIT
+**Version:** 0.5.11 | **License:** MIT
 
 ---
 
@@ -14,9 +14,28 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.10)
+## ✨ Key Features (v0.5.11)
 
-### 🔗 Git Integration (NEW in v0.5.10)
+### 🐛 Transaction Persistence Fix (CRITICAL in v0.5.11)
+- **Fixed Data Loss** - Transactions now persist correctly across Claude Code sessions
+- **Atomic Writes** - Uses temporary file + rename pattern for safe database writes
+- **Auto-Flush System** - Automatic database flush every 10 seconds with pending changes
+- **Shutdown Hooks** - Forced save on SIGINT, SIGTERM, beforeExit events
+- **Enhanced Logging** - Debug logs show save operations and transaction counts
+- **Verified Working** - 823+ transactions persisted in `~/.argus/argus.db` (6+ MB)
+
+**Before v0.5.11:**
+- Transactions lost when Claude Code restarted
+- No automatic flush mechanism
+- Silent failures in database saves
+
+**After v0.5.11:**
+- ✅ Guaranteed persistence with atomic writes
+- ✅ Auto-flush every 10 seconds
+- ✅ Forced save on shutdown
+- ✅ Error logging for debugging
+
+### 🔗 Git Integration (v0.5.10)
 - **Automatic Git Detection** - Recognizes git repositories and captures context
 - **Branch Tracking** - Records current git branch for every transaction
 - **Commit References** - Stores last commit hash, message, author, and date

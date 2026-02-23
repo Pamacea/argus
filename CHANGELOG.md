@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.11] - 2026-02-23
+
+### 🐛 Bug Fixes
+
+#### Transaction Persistence Fix - Critical Data Loss Prevention
+- **Fixed: Transaction Loss on Session Restart** - Transactions are now properly persisted across Claude Code sessions
+- **Atomic File Writes** - Database now uses temporary file + rename pattern for safe writes
+- **Auto-Flush System** - Automatic database flush every 10 seconds when there are pending changes
+- **Shutdown Hooks** - Forced database save on SIGINT, SIGTERM, and beforeExit events
+- **Enhanced Logging** - Debug logs show database save operations and transaction counts
+
+#### Storage Layer Improvements
+- **Robust saveToFile()** - No longer fails silently, throws errors on failure
+- **Pending Changes Tracking** - Tracks when database has unsaved changes
+- **Initialization Verification** - Logs transaction count when loading existing database
+- **Write-Ahead Logging** - Temporary file ensures no corruption if write is interrupted
+
+### 🔧 Technical Details
+
+**File Modified:** `plugins/argus/mcp/src/storage/database.ts`
+
+**Before:**
+- Transactions could be lost if process terminated abruptly
+- No automatic flush mechanism
+- Silent failures in saveToFile()
+
+**After:**
+- ✅ Guaranteed persistence with atomic writes
+- ✅ Auto-flush every 10 seconds
+- ✅ Forced save on shutdown signals
+- ✅ Error logging for debugging
+
+### 📊 Impact
+
+**Verified Working:**
+- ✅ 823+ transactions persisted across sessions
+- ✅ Database file: `~/.argus/argus.db` (6+ MB)
+- ✅ No data loss on Claude Code restart
+
+### 🧪 Testing
+
+Added test script: `plugins/argus/mcp/test-persistence.mjs`
+
+```bash
+cd plugins/argus/mcp
+node test-persistence.mjs
+```
+
+---
+
 ## [0.5.10] - 2026-02-23
 
 ### ✨ New Features

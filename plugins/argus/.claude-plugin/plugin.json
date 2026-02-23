@@ -1,13 +1,13 @@
 {
   "name": "argus",
-  "version": "0.5.9",
-  "description": "Sentinelle omnisciente - Force l'IA à consulter le contexte historique et technique avant toute action",
+  "version": "0.5.11",
+  "description": "Sentinelle omnisciente - Force l'IA à consulter le contexte historique et technique avant toute action avec persistance garantie",
   "author": {
     "name": "Oalacea"
   },
   "repository": "https://github.com/Pamacea/argus",
   "license": "MIT",
-  "keywords": ["memory", "rag", "hooks", "context-aware", "mcp", "sentinel"],
+  "keywords": ["memory", "rag", "hooks", "context-aware", "mcp", "sentinel", "persistence"],
   "skills": "./skills/",
   "commands": "./skills/",
   "hooks": {
