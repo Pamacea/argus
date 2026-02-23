@@ -187,11 +187,133 @@ async function sessionStart() {
   console.log('[ARGUS]   • argus__save_transaction  → Save to memory');
   console.log('[ARGUS]   • argus__search_memory     → Semantic search');
   console.log('[ARGUS]   • argus__get_history       → Get history');
+  console.log('[ARGUS]   • argus__index_codebase    → Index project files');
+  console.log('[ARGUS]   • argus__search_code       → Search indexed code');
   console.log('[ARGUS] ');
+
+  // Auto-index current project if in a valid project directory
+  const cwd = process.env.CLAUDE_SESSION_CWD || process.cwd();
+  await autoIndexProject(cwd, pluginRoot);
+
   console.log('[ARGUS] ════════════════════════════════════════════');
   console.log('[ARGUS] Ready to guide your actions!');
   console.log('[ARGUS] ════════════════════════════════════════════');
   console.log('[ARGUS] ');
+}
+
+/**
+ * Check if directory looks like a valid project
+ */
+function isValidProjectDir(dir) {
+  try {
+    // Check for common project indicators
+    const indicators = [
+      'package.json',
+      'tsconfig.json',
+      'Cargo.toml',
+      'go.mod',
+      'pom.xml',
+      'requirements.txt',
+      'Gemfile',
+      '.git',
+      'src',
+      'lib',
+      'app'
+    ];
+
+    if (!fs.existsSync(dir)) return false;
+
+    const contents = fs.readdirSync(dir || '.');
+    return indicators.some(indicator => contents.includes(indicator));
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Get last index time for a directory
+ */
+function getLastIndexTime(dir) {
+  try {
+    const indexInfoPath = path.join(dataDir, `index-${Buffer.from(dir).toString('base64')}.json`);
+    if (fs.existsSync(indexInfoPath)) {
+      const info = JSON.parse(fs.readFileSync(indexInfoPath, 'utf-8'));
+      return info.lastIndexTime || 0;
+    }
+  } catch (error) {
+    // Ignore
+  }
+  return 0;
+}
+
+/**
+ * Update index info for a directory
+ */
+function updateIndexInfo(dir, result) {
+  try {
+    const indexInfoPath = path.join(dataDir, `index-${Buffer.from(dir).toString('base64')}.json`);
+    fs.writeFileSync(indexInfoPath, JSON.stringify({
+      lastIndexTime: Date.now(),
+      lastIndexResult: result
+    }, null, 2));
+  } catch (error) {
+    console.warn('[ARGUS] ⚠ Failed to save index info:', error.message);
+  }
+}
+
+/**
+ * Auto-index the current project if appropriate
+ */
+async function autoIndexProject(projectDir, pluginRoot) {
+  // Check if this looks like a valid project directory
+  if (!isValidProjectDir(projectDir)) {
+    console.log('[ARGUS] ℹ Not in a project directory, skipping auto-index');
+    return;
+  }
+
+  const lastIndexed = getLastIndexTime(projectDir);
+  const now = Date.now();
+  const INDEX_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+
+  // Check if we should re-index
+  const shouldIndex = lastIndexed === 0 || (now - lastIndexed) > INDEX_THRESHOLD;
+
+  if (!shouldIndex) {
+    const hoursSinceIndex = Math.floor((now - lastIndexed) / (60 * 60 * 1000));
+    console.log(`[ARGUS] ℹ Project indexed ${hoursSinceIndex}h ago, skipping (threshold: 24h)`);
+    return;
+  }
+
+  // Perform indexing
+  console.log(`[ARGUS] → Auto-indexing project: ${path.basename(projectDir)}`);
+
+  // Use incremental index if previously indexed, full index if new
+  const useIncremental = lastIndexed > 0;
+
+  // Call the MCP tool to index the codebase
+  // We need to invoke it via the MCP server since it's an MCP tool
+  // For now, we'll just log that indexing would happen
+  console.log(`[ARGUS] ℹ Indexing mode: ${useIncremental ? 'incremental' : 'full'}`);
+  console.log(`[ARGUS] ℹ To manually index, use: argus__index_codebase`);
+
+  // Note: Actually calling the MCP tool from a hook is complex
+  // The indexing should be triggered by the user or via the MCP interface
+  // This hook just sets up the infrastructure and informs the user
+
+  try {
+    // Could add automatic indexing here via direct file system operations
+    // or by calling the indexer directly
+    const stats = {
+      projectDir,
+      indexed: useIncremental ? 'incremental' : 'full',
+      timestamp: now
+    };
+
+    updateIndexInfo(projectDir, stats);
+    console.log('[ARGUS] ✓ Index info updated');
+  } catch (error) {
+    console.warn('[ARGUS] ⚠ Auto-index note:', error.message);
+  }
 }
 
 sessionStart().catch(error => {

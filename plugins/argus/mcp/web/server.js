@@ -137,7 +137,7 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       name: 'ARGUS Web Dashboard',
-      version: '0.5.0',
+      version: '0.5.1',
       description: 'Sentinelle omnisciente pour Claude Code',
       server: {
         host: HOST,
@@ -186,7 +186,7 @@ async function handleRequest(req, res) {
           description: 'Get server status and information',
           response: {
             name: 'ARGUS Web Dashboard',
-            version: '0.5.0',
+            version: '0.5.1',
             server: {
               host: 'localhost',
               port: 30000,

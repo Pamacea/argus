@@ -77,4 +77,4 @@ Récupère l'historique avec filtres.
 
 ---
 
-*API Reference v0.5.0 - ARGUS*
+*API Reference v0.5.1 - ARGUS*
