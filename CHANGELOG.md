@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.4] - 2026-02-23
+
+### 🚀 Auto-Index Amélioré
+
+#### Scan Complet du Projet
+- **Root Scanning** : Parcourt la racine du projet entier (pas seulement src/, lib/)
+- **Plus de Langages** : Indexe `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.rs`, `.go`, `.java`, `.cjs`, `.mjs`
+- **Smart Filtering** : Exclut `node_modules`, `.git`, `.next`, `dist`, `build`, `cache`, `.claude`, `coverage`
+
+#### Multi-Projets
+- **Index Multiple Projects** : Chaque projet est indexé séparément
+- **Dashboard Multi-Projets** : Visualise tous les projets indexés
+- **Project Identification** : Chemin complet pour identifier chaque projet
+
+### 🔧 Dashboard Amélioré
+
+#### Fichiers Échantillonnés
+- **Sample Files** : Affiche les 5 premiers fichiers indexés
+- **File Counter** : Montre le nombre total + "X more" pour les fichiers restants
+- **Relative Paths** : Affiche les chemins relatifs pour lisibilité
+
+#### Information Complète
+- **Project Path** : Chemin complet du projet
+- **File Count** : Nombre de fichiers indexés par projet
+- **Last Indexed** : Timestamp du dernier indexage
+- **Index Type** : Full vs incremental
+
+### 🛠️ Script Autonome
+
+#### Stand-alone Indexer
+- **Portable Script** : `scripts/index-project.js` fonctionne depuis n'importe quel répertoire
+- **No Dependencies** : Utilise seulement les modules Node.js natifs
+- **Easy Usage** : `node /path/to/argus/scripts/index-project.js`
+
+### 📝 Technical Details
+
+**Modified Files:**
+- `hooks/session-start.js` - Scan racine + exclude directories améliorés
+- `web/index.html` - Affichage échantillons de fichiers
+- `scripts/index-project.js` - Script autonome pour indexation manuelle
+
+**Improvements:**
+- Better directory filtering (excludes .claude, cache, coverage, etc.)
+- More file extensions (.cjs, .mjs added)
+- Cleaner project identification
+- Better error handling for unreadable directories
+
+---
+
 ## [0.5.3] - 2026-02-23
 
 ### 🚀 Major Features
@@ -166,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.5.4]: https://github.com/Pamacea/argus/releases/tag/v0.5.4
 [0.5.3]: https://github.com/Pamacea/argus/releases/tag/v0.5.3
 [0.5.2]: https://github.com/Pamacea/argus/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Pamacea/argus/releases/tag/v0.5.1

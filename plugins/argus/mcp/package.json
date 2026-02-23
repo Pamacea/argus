@@ -1,6 +1,6 @@
 {
   "name": "argus-mcp-server",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "ARGUS MCP Server - Memory and RAG for Claude Code",
   "type": "module",
   "scripts": {

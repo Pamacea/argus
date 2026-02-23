@@ -479,7 +479,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <p><strong>ARGUS</strong> v<span id="version">0.5.3</span> - Sentinelle Omnisciente pour Claude Code</p>
+      <p><strong>ARGUS</strong> v<span id="version">0.5.4</span> - Sentinelle Omnisciente pour Claude Code</p>
       <p style="margin-top: 0.5rem;">
         <a href="https://github.com/Pamacea/argus" target="_blank">GitHub</a> ·
         <a href="/api/docs">API Documentation</a>
@@ -662,24 +662,35 @@
       return `
         <ul class="project-list">
           ${projects.map(project => {
-            const lastIndexed = new Date(project.lastIndexed);
+            const lastIndexed = new Date(project.lastIndexed || project.timestamp);
             const timeAgo = formatDuration((Date.now() - lastIndexed.getTime()) / 1000);
             const fileCount = project.fileCount || 0;
             const indexed = project.indexed || 'full';
+            const files = project.files || [];
+            const sampleFiles = files.slice(0, 5).map(f => f.relative || f.path).join(', ');
+            const moreCount = Math.max(0, files.length - 5);
 
             return `
-            <li class="project-item" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+            <li class="project-item" style="flex-direction: column; align-items: flex-start; gap: 0.75rem;">
               <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                   <div class="project-name">${project.name}</div>
-                  <div class="project-path">${project.project}</div>
+                  <div class="project-path" style="font-size: 0.85rem;">${project.project}</div>
                 </div>
                 <span class="project-status indexed">✓ ${indexed === 'full' ? 'Fully' : 'Partially'} Indexed</span>
               </div>
               <div style="width: 100%; display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-                <span>📄 ${fileCount} files</span>
+                <span>📄 <strong>${fileCount}</strong> files</span>
                 <span>🕒 ${timeAgo} ago</span>
               </div>
+              ${files.length > 0 ? `
+              <div style="width: 100%; margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; font-size: 0.8rem;">
+                <div style="color: var(--text-secondary); margin-bottom: 0.5rem;">Sample files:</div>
+                <div style="font-family: monospace; word-break: break-all; line-height: 1.4;">
+                  ${sampleFiles}${moreCount > 0 ? ` <span style="color: var(--accent-blue);">+${moreCount} more</span>` : ''}
+                </div>
+              </div>
+              ` : ''}
             </li>
           `}).join('')}
         </ul>

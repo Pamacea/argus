@@ -1,107 +1,89 @@
 # ARGUS - Sentinelle Omnisciente
 
-> **v0.5.3** - Force l'IA à devenir un collaborateur context-aware en consultant le RAG, l'index et la documentation avant toute action.
+> **v0.5.4** - Force l'IA à devenir un collaborateur context-aware en consultant le RAG, l'index et la documentation avant toute action.
 
 ## 🎯 Vision
 
 ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur averti qui ne JAMAIS agit sans avoir vérifié :
 - ✅ Mémoire des prompts précédents
 - ✅ Recherche sémantique locale (TF-IDF) ou vectorielle (Qdrant optionnel)
-- ✅ Index automatique des fichiers
+- ✅ Index automatique complet (racine du projet)
 - ✅ Documentation du projet
-- ✅ Dashboard web en temps réel
+- ✅ Visualisation multi-projets
 
-## 🆕 v0.5.3 Nouveautés
+## 🆕 v0.5.4 Nouveautés
 
-### Recherche Sémantique Locale
-- **TF-IDF Search** : Fonctionne sans Docker ni Qdrant
-- **Automatic Fallback** : Bascule automatiquement sur local search si Qdrant indisponible
-- **Zero Dependencies** : Aucune dépendance externe requise
-
-### Auto-Index Fix
-- **Vrai File Scanning** : Parcourt réellement les répertoires du projet
-- **Multi-Language** : Indexe `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.rs`, `.go`, `.java`
-- **Smart Filtering** : Ignore `node_modules`, `.git`, `dist`, `build`
+### Auto-Index Amélioré
+- **Scan complet** : Parcourt la racine du projet entier
+- **Smart filtering** : Exclut `node_modules`, `.git`, `.next`, `dist`, `build`, `cache`, `.claude`, `coverage`
+- **Plus de langages** : Indexe `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.rs`, `.go`, `.java`, `.cjs`, `.mjs`
+- **Multi-projets** : Indexe et affiche tous les projets dans le dashboard
 
 ### Dashboard Amélioré
-- **Indexed Projects** : Liste des projets indexés avec file counts
-- **Timestamps** : Date de dernier indexage
-- **API Endpoint** : `/api/indexed` pour les données brutes
+- **Fichiers échantillonnés** : Affiche les 5 premiers fichiers + compteur
+- **Multi-projets** : Liste tous les projets indexés avec détails
+- **Path complet** : Chemin complet du projet pour identification
+
+### Script d'Indexation Autonome
+- **Stand-alone** : Fonctionne depuis n'importe quel répertoire
+- **Portable** : Pas de dépendances externes
+- **Usage** : `node /path/to/argus/scripts/index-project.js`
 
 ## 🚀 Quick Start
 
 ```bash
-# Installation via Claude Code Marketplace
+# Installation
 /install-plugin argus
 
-# Le MCP server démarre automatiquement
-# Les hooks Claude Code sont activés
-# L'auto-index démarre automatiquement
-# Le dashboard est accessible sur http://localhost:30000
+# Auto-index au démarrage
+# Dashboard sur http://localhost:30000
 ```
 
 ## 🔧 Utilisation
 
-Avant toute exploration ou création de team, consultez ARGUS :
+Avant toute exploration, consultez ARGUS :
 
 ```
-User: "Explore l'authentification dans ce projet"
+User: "Explore l'authentification"
 
-Claude: Je dois d'abord consulter ARGUS...
-1. Appel: argus__check_hooks("Explore l'authentification")
-2. ARGUS retourne: "3 patterns auth trouvés dans /src/auth/"
-3. Justification: "Selon ARGUS, ce projet utilise JWT + refresh tokens"
+Claude: Je consulte ARGUS...
+1. argus__check_hooks("Explore l'authentification")
+2. ARGUS retourne: "3 patterns trouvés"
+3. Justification avec contexte
 ```
 
-## 🪝 MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `argus__check_hooks` | Consulte RAG + Index + Docs (OBLIGATOIRE) |
-| `argus__save_transaction` | Sauvegarde prompt + contexte + résultat |
-| `argus__search_memory` | Recherche sémantique dans l'historique |
-| `argus__get_history` | Récupère l'historique des transactions |
-| `argus__index_codebase` | Indexe manuellement les fichiers du projet |
-| `argus__search_code` | Recherche dans le code indexé |
-
-## 📊 Dashboard Web
+## 📊 Dashboard
 
 **http://localhost:30000**
 
-- **Indexed Projects** : Projets indexés avec file counts et timestamps
-- **Statistics** : Transactions, hooks, storage engine
-- **Memory Stats** : Database size, last index time
-- **Server Info** : Uptime, PID, platform
-- **API Endpoints** : Documentation complète
+- **Indexed Projects** : Tous les projets avec files + échantillons
+- **Statistics** : Engine, transactions, hooks
+- **API** : Endpoints disponibles
 
-## 🔍 Modes de Recherche
+## 🔧 Indexation
 
-### Local Search (Défaut)
-- **Avantages** : Pas de Docker, rapide, léger
-- **Technique** : TF-IDF avec tokenization
-- **Utilisation** : Recherche textuelle standard
+### Automatique
+Au démarrage de session, ARGUS indexe automatiquement le projet courant.
 
-### Vector Search (Optionnel)
-- **Avantages** : Recherche sémantique avancée
-- **Prérequis** : Docker Desktop + Qdrant container
-- **Utilisation** : Recherche par similarité conceptuelle
-
-ARGUS bascule automatiquement entre les deux modes !
+### Manuelle
+```bash
+cd /votre/projet
+node /chemin/vers/argus/scripts/index-project.js
+```
 
 ## 📚 Documentation
 
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Architecture complète
-- [API.md](./docs/API.md) - Référence API MCP
-- [INSTALLATION.md](./docs/INSTALLATION.md) - Guide d'installation détaillé
+- [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [API.md](./docs/API.md)
 
 ## 🙏 Inspiration
 
-- **Aureus** - Git automation et hooks
+- **Aureus** - Git automation
 - **Claude-mem** - Memory persistence
-- **Argus** - Le géant aux cent yeux (mythologie grecque)
+- **Argus** - Géant aux cent yeux
 
 ## 📄 Licence
 
 MIT
 
-**ARGUS v0.5.3** - *Rien ne lui échappe.*
+**ARGUS v0.5.4** - *Rien ne lui échappe.*

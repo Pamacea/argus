@@ -395,10 +395,11 @@ function isValidProjectDir(dir) {
  */
 function getLastIndexTime(dir) {
   try {
+    const dataDir = path.join(require('os').homedir(), '.argus');
     const indexInfoPath = path.join(dataDir, `index-${Buffer.from(dir).toString('base64')}.json`);
     if (fs.existsSync(indexInfoPath)) {
       const info = JSON.parse(fs.readFileSync(indexInfoPath, 'utf-8'));
-      return info.lastIndexTime || 0;
+      return info.lastIndexTime || info.timestamp || 0;
     }
   } catch (error) {
     // Ignore
@@ -411,11 +412,9 @@ function getLastIndexTime(dir) {
  */
 function updateIndexInfo(dir, result) {
   try {
+    const dataDir = path.join(require('os').homedir(), '.argus');
     const indexInfoPath = path.join(dataDir, `index-${Buffer.from(dir).toString('base64')}.json`);
-    fs.writeFileSync(indexInfoPath, JSON.stringify({
-      lastIndexTime: Date.now(),
-      lastIndexResult: result
-    }, null, 2));
+    fs.writeFileSync(indexInfoPath, JSON.stringify(result, null, 2));
   } catch (error) {
     console.warn('[ARGUS] ⚠ Failed to save index info:', error.message);
   }
@@ -453,27 +452,22 @@ async function autoIndexProject(projectDir, pluginRoot) {
   // Actually perform the indexing by walking the directory
   try {
     const indexedFiles = [];
-    const srcDirs = ['src', 'lib', 'app', 'components', 'hooks', 'utils', 'services'];
+    const skipDirs = ['node_modules', '.git', '.next', 'dist', 'build', 'cache', '.claude', 'coverage'];
 
-    // Walk through common source directories
-    for (const srcDir of srcDirs) {
-      const srcPath = path.join(projectDir, srcDir);
-      if (!fs.existsSync(srcPath)) continue;
+    const walkDir = (dir) => {
+      try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const stat = fs.statSync(fullPath);
 
-      const walkDir = (dir) => {
-        try {
-          const files = fs.readdirSync(dir);
-          for (const file of files) {
-            const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
-
-            if (stat.isDirectory()) {
-              // Skip node_modules and similar
-              if (!['node_modules', '.git', 'dist', 'build', '.next'].includes(file)) {
-                walkDir(fullPath);
-              }
-            } else if (stat.isFile() && /\.(js|ts|jsx|tsx|py|rs|go|java)$/.test(file)) {
-              // Store file info for indexing
+          if (stat.isDirectory()) {
+            if (!skipDirs.includes(file)) {
+              walkDir(fullPath);
+            }
+          } else if (stat.isFile()) {
+            const ext = path.extname(file);
+            if (['.js', '.ts', '.jsx', '.tsx', '.py', '.rs', '.go', '.java', '.cjs', '.mjs'].includes(ext)) {
               indexedFiles.push({
                 path: fullPath,
                 relative: path.relative(projectDir, fullPath),
@@ -482,20 +476,22 @@ async function autoIndexProject(projectDir, pluginRoot) {
               });
             }
           }
-        } catch (error) {
-          // Skip directories we can't read
         }
-      };
+      } catch (error) {
+        // Skip directories we can't read
+      }
+    };
 
-      walkDir(srcPath);
-    }
+    // Start from project root
+    walkDir(projectDir);
 
     // Save index info
     const stats = {
       projectDir,
+      name: path.basename(projectDir),
       indexed: useIncremental ? 'incremental' : 'full',
       fileCount: indexedFiles.length,
-      files: indexedFiles.slice(0, 100), // Keep first 100 files
+      files: indexedFiles.slice(0, 500), // Keep first 500 files
       timestamp: now
     };
 
