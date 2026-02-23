@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.7 | **License:** MIT
+**Version:** 0.5.8 | **License:** MIT
 
 ---
 
@@ -14,7 +14,7 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.7)
+## ✨ Key Features (v0.5.8)
 
 ### 🎨 Complete Dashboard Redesign
 - **New Sidebar Navigation** - Clean left sidebar with icons for all sections
@@ -391,13 +391,13 @@ docker run -p 6333:6333 qdrant/qdrant
 
 See **CHANGELOG.md** for detailed version history.
 
-### Current Version: 0.5.2
+### Current Version: 0.5.8
 
-**Recent Fixes:**
-- Fixed web dashboard infinite loading issues
-- Fixed port detection (TIME_WAIT connections)
-- Fixed server.js cwd for index.html serving
-- Improved error handling in dashboard
+**Recent Updates:**
+- Cache cleanup and system reset
+- Documentation refresh
+- Verified all hooks and MCP tools operational
+- Read/write operations tested and confirmed working
 
 ---
 
@@ -415,4 +415,4 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**ARGUS v0.5.2** - Your omniscient sentinel for Claude Code.
+**ARGUS v0.5.8** - Your omniscient sentinel for Claude Code.

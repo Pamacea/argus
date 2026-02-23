@@ -23,20 +23,9 @@
         ]
       }
     ],
-    "PrePrompt": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-prompt.js"
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
-        "matcher": "*",
+        "matcher": "Explore|CreateTeam",
         "hooks": [
           {
             "type": "command",
@@ -47,26 +36,20 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "*",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-edit.js"
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.js"
           }
         ]
-      }
-    ],
-    "PostResponse": [
+      },
       {
         "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-response.js"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.js"
           }
         ]
       }

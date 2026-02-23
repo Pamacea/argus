@@ -481,6 +481,58 @@
       gap: 0.25rem;
     }
 
+    /* Activity Feed */
+    .activity-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .activity-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .activity-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .activity-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .activity-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+
+    .activity-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .activity-time {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -1048,31 +1100,118 @@
     }
 
     // Load activity
+    // Generate intelligent summary from transaction
+    function generateActivitySummary(tx) {
+      const toolName = tx.toolName || 'Unknown';
+      const timeAgo = getTimeAgo(tx.timestamp);
+
+      if (tx.category === 'file_modification' || tx.isFileEdit) {
+        // File modification summary
+        if (tx.prompt.includes('Edit')) {
+          const match = tx.prompt.match(/Edit (.+?):/);
+          const file = match ? match[1] : 'a file';
+          return {
+            icon: '📝',
+            title: `Modified ${file.split(/[/\\]/).pop()}`,
+            description: tx.prompt.substring(0, 100) + '...',
+            time: timeAgo
+          };
+        } else if (tx.prompt.includes('Write')) {
+          const match = tx.prompt.match(/Write (.+?) \(/);
+          const file = match ? match[1] : 'a file';
+          return {
+            icon: '✨',
+            title: `Created ${file.split(/[/\\]/).pop()}`,
+            description: tx.prompt.substring(0, 100) + '...',
+            time: timeAgo
+          };
+        }
+      }
+
+      // Tool execution summary
+      switch(toolName) {
+        case 'Bash':
+          const cmdMatch = tx.prompt.match(/command="([^"]+)"/);
+          const cmd = cmdMatch ? cmdMatch[1] : 'command';
+          return {
+            icon: '⚡',
+            title: `Executed ${cmd.split(' ')[0]} ${cmd.split(' ')[1] || ''}`,
+            description: `Ran: ${cmd.substring(0, 60)}${cmd.length > 60 ? '...' : ''}`,
+            time: timeAgo
+          };
+        case 'Read':
+          const fileMatch = tx.prompt.match(/file_path="([^"]+)"/);
+          const file = fileMatch ? fileMatch[1].split(/[/\\]/).pop() : 'file';
+          return {
+            icon: '📖',
+            title: `Read ${file}`,
+            description: 'Analyzed file contents',
+            time: timeAgo
+          };
+        case 'Edit':
+          return {
+            icon: '📝',
+            title: 'Modified code',
+            description: tx.prompt.substring(0, 80) + '...',
+            time: timeAgo
+          };
+        case 'Write':
+          return {
+            icon: '✨',
+            title: 'Created file',
+            description: tx.prompt.substring(0, 80) + '...',
+            time: timeAgo
+          };
+        default:
+          return {
+            icon: '🔧',
+            title: toolName,
+            description: tx.prompt.substring(0, 100) + '...',
+            time: timeAgo
+          };
+      }
+    }
+
+    function getTimeAgo(timestamp) {
+      const seconds = Math.floor((Date.now() - timestamp) / 1000);
+      if (seconds < 60) return `${seconds}s ago`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
     async function loadActivity() {
       const content = document.getElementById('activityContent');
-      const transactions = await fetchJSON(`${API_BASE}/api/transactions?limit=20`);
+      const transactions = await fetchJSON(`${API_BASE}/api/transactions?limit=15`);
 
-      if (transactions && transactions.transactions) {
-        content.innerHTML = transactions.transactions.map(tx => `
-          <div class="transaction-item">
-            <div class="transaction-header">
-              <span class="transaction-id">${tx.id}</span>
-              <span class="transaction-time">${new Date(tx.timestamp).toLocaleString()}</span>
-            </div>
-            <div class="transaction-prompt">
-              <div class="transaction-prompt-label">Prompt</div>
-              <div class="transaction-prompt-content">${escapeHtml(tx.prompt)}</div>
-            </div>
+      if (transactions && transactions.transactions && transactions.transactions.length > 0) {
+        // Generate intelligent summaries
+        const activities = transactions.transactions
+          .filter(tx => tx.toolName && tx.toolName !== 'unknown')
+          .map(tx => generateActivitySummary(tx));
+
+        content.innerHTML = `
+          <div class="activity-feed">
+            ${activities.map(activity => `
+              <div class="activity-item">
+                <div class="activity-icon">${activity.icon}</div>
+                <div class="activity-content">
+                  <div class="activity-title">${escapeHtml(activity.title)}</div>
+                  <div class="activity-description">${escapeHtml(activity.description)}</div>
+                </div>
+                <div class="activity-time">${activity.time}</div>
+              </div>
+            `).join('')}
           </div>
-        `).join('');
+        `;
       } else {
         content.innerHTML = `
           <div class="empty-state">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
-            <div class="empty-state-title">No activity yet</div>
-            <div class="empty-state-description">Transactions will appear here as they occur</div>
+            <div class="empty-state-title">No recent activity</div>
+            <div class="empty-state-description">Your actions will appear here as intelligent summaries</div>
           </div>
         `;
       }

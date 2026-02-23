@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.8] - 2026-02-23
+
+### 🔧 Maintenance
+
+#### Cache Cleanup & System Reset
+- **Cache Directory Cleanup** - Removed stale cache files for fresh start
+- **State Reset** - Clean ARGUS state after cache deletion
+- **Documentation Refresh** - Updated all documentation to reflect current state
+
+#### Testing & Verification
+- **Read/Write Tests** - Verified all file operations working correctly
+- **Hook Validation** - Confirmed all hooks functioning properly
+- **MCP Tools Verification** - All MCP tools operational
+
+---
+
 ## [0.5.7] - 2026-02-23
 
 ### 🐛 Bug Fixes
