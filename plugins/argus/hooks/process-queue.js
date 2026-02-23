@@ -15,7 +15,7 @@ const os = require('os');
 const ARGUS_HOME = path.join(os.homedir(), '.argus');
 const QUEUE_DIR = path.join(ARGUS_HOME, 'queue');
 const TRANSACTION_QUEUE = path.join(QUEUE_DIR, 'transactions.jsonl');
-const STORAGE_DB = path.join(ARGUS_HOME, 'transactions.sqlite');
+const TRANSACTIONS_FILE = path.join(ARGUS_HOME, 'transactions.jsonl');
 
 /**
  * Read queue from JSONL file
@@ -57,66 +57,17 @@ function clearQueue(filePath) {
 }
 
 /**
- * Initialize SQLite database
+ * Append transaction to storage file
  */
-function initDatabase() {
-  const sqlite3 = require('sqlite3').verbose();
-  const db = new sqlite3.Database(STORAGE_DB);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      timestamp INTEGER,
-      sessionId TEXT,
-      prompt TEXT,
-      promptType TEXT,
-      context TEXT,
-      result TEXT,
-      metadata TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.run(`
-    CREATE INDEX IF NOT EXISTS idx_timestamp ON transactions(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_sessionId ON transactions(sessionId);
-    CREATE INDEX IF NOT EXISTS idx_promptType ON transactions(promptType);
-  `);
-
-  return db;
-}
-
-/**
- * Save transaction to database
- */
-function saveTransaction(db, transaction) {
-  return new Promise((resolve, reject) => {
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO transactions
-      (id, timestamp, sessionId, prompt, promptType, context, result, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      transaction.id,
-      transaction.timestamp,
-      transaction.sessionId,
-      transaction.prompt.raw,
-      transaction.prompt.type,
-      JSON.stringify(transaction.context),
-      JSON.stringify(transaction.result),
-      JSON.stringify(transaction.metadata),
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.lastID);
-        }
-      }
-    );
-
-    stmt.finalize();
-  });
+function appendTransaction(transaction) {
+  try {
+    const line = JSON.stringify(transaction) + '\n';
+    fs.appendFileSync(TRANSACTIONS_FILE, line);
+    return true;
+  } catch (error) {
+    console.error('[ARGUS Queue] Error appending transaction:', error.message);
+    return false;
+  }
 }
 
 /**
@@ -132,7 +83,6 @@ async function processQueue() {
   console.log(`[ARGUS Queue] Processing ${items.length} transactions...`);
 
   const { v4: uuidv4 } = require('uuid');
-  const db = initDatabase();
 
   let processed = 0;
   let failed = 0;
@@ -167,15 +117,16 @@ async function processQueue() {
         }
       };
 
-      await saveTransaction(db, transaction);
-      processed++;
+      if (appendTransaction(transaction)) {
+        processed++;
+      } else {
+        failed++;
+      }
     } catch (error) {
-      console.error('[ARGUS Queue] Error saving transaction:', error.message);
+      console.error('[ARGUS Queue] Error processing transaction:', error.message);
       failed++;
     }
   }
-
-  db.close();
 
   // Clear queue after processing
   if (processed > 0 || failed > 0) {

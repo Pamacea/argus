@@ -6,8 +6,8 @@
  * Cleanup and persist state when Claude Code session ends.
  */
 
-import path from 'path';
-import fs from 'fs';
+const path = require('path');
+const fs = require('fs');
 
 async function stop() {
   console.log('[ARGUS] ');
@@ -16,8 +16,9 @@ async function stop() {
   console.log('[ARGUS] ════════════════════════════════════════════');
 
   // Get data directory
+  const os = require('os');
   const dataDir = process.env.ARGUS_DATA_DIR ||
-                  path.join((await import('os')).homedir(), '.argus');
+                  path.join(os.homedir(), '.argus');
 
   try {
     // Check if data directory exists
@@ -50,4 +51,6 @@ async function stop() {
 stop().catch(error => {
   console.error('[ARGUS] Fatal error during stop:', error);
   process.exit(1);
+}).then(() => {
+  process.exit(0);
 });

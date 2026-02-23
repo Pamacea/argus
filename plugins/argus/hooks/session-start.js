@@ -341,6 +341,54 @@ async function startQueueProcessor(pluginRoot) {
   }
 }
 
+/**
+ * Ensure MCP server is configured in mcp.json
+ */
+async function ensureMcpConfigured(pluginRoot) {
+  const os = require('os');
+  const mcpConfigPath = path.join(os.homedir(), '.claude', 'mcp.json');
+  const installScriptPath = path.join(pluginRoot, 'scripts', 'install-mcp.js');
+
+  // Check if MCP server is already configured
+  try {
+    if (fs.existsSync(mcpConfigPath)) {
+      const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
+      if (mcpConfig.mcpServers && mcpConfig.mcpServers.argus) {
+        // Already configured, but check if path is still valid
+        const mcpServerPath = path.join(pluginRoot, 'mcp', 'build', 'index.js');
+        if (fs.existsSync(mcpServerPath)) {
+          console.log('[ARGUS] ✓ MCP server already configured');
+          return;
+        }
+      }
+    }
+  } catch (error) {
+    // Config doesn't exist or is invalid, continue to install
+  }
+
+  // Run install script
+  if (fs.existsSync(installScriptPath)) {
+    console.log('[ARGUS] → Configuring MCP server...');
+    try {
+      await new Promise((resolve, reject) => {
+        exec(`node "${installScriptPath}" install`, (error, stdout, stderr) => {
+          if (error) {
+            console.warn('[ARGUS] ⚠ MCP configuration warning:', stderr || error.message);
+            resolve(); // Don't fail, just warn
+          } else {
+            console.log('[ARGUS] ✓ MCP server configured');
+            resolve();
+          }
+        });
+      });
+    } catch (error) {
+      console.warn('[ARGUS] ⚠ Could not configure MCP server:', error.message);
+    }
+  } else {
+    console.warn('[ARGUS] ⚠ MCP install script not found');
+  }
+}
+
 async function sessionStart() {
   console.log('[ARGUS] Initializing...');
   console.log('[ARGUS] ════════════════════════════════════════════');
@@ -365,6 +413,9 @@ async function sessionStart() {
   const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
   if (pluginRoot) {
     console.log(`[ARGUS] ✓ Plugin root: ${pluginRoot}`);
+
+    // Auto-install MCP server configuration if needed
+    await ensureMcpConfigured(pluginRoot);
 
     // Start Qdrant if Docker is available
     const qdrantRunning = await ensureQdrant();
