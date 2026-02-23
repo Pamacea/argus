@@ -34,14 +34,16 @@ function isPortInUse(port) {
 
     if (isWindows) {
       import('child_process').then(({ exec }) => {
-        exec(`netstat -ano | findstr :${port}`, (error) => {
-          resolve(!error);
+        exec(`netstat -ano | findstr :${port} | findstr LISTENING`, (error, stdout) => {
+          // If there's output with LISTENING state, port is in use
+          resolve(stdout.trim().length > 0);
         });
       });
     } else {
       import('child_process').then(({ exec }) => {
-        exec(`lsof -i :${port} 2>/dev/null || true`, (error) => {
-          resolve(!error);
+        exec(`lsof -i :${port} 2>/dev/null || true`, (error, stdout) => {
+          // If there's output, port is in use
+          resolve(stdout.trim().length > 0);
         });
       });
     }
@@ -137,7 +139,7 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       name: 'ARGUS Web Dashboard',
-      version: '0.5.1',
+      version: '0.5.2',
       description: 'Sentinelle omnisciente pour Claude Code',
       server: {
         host: HOST,
@@ -186,7 +188,7 @@ async function handleRequest(req, res) {
           description: 'Get server status and information',
           response: {
             name: 'ARGUS Web Dashboard',
-            version: '0.5.1',
+            version: '0.5.2',
             server: {
               host: 'localhost',
               port: 30000,

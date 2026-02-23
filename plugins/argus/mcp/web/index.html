@@ -479,7 +479,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <p><strong>ARGUS</strong> v<span id="version">0.5.0</span> - Sentinelle Omnisciente pour Claude Code</p>
+      <p><strong>ARGUS</strong> v<span id="version">0.5.2</span> - Sentinelle Omnisciente pour Claude Code</p>
       <p style="margin-top: 0.5rem;">
         <a href="https://github.com/Pamacea/argus" target="_blank">GitHub</a> ·
         <a href="/api/docs">API Documentation</a>
@@ -673,22 +673,30 @@
       // Sample activity - in real implementation, fetch from API
       const activities = [
         {
-          time: new Date(),
+          time: Date.now(),
           message: 'ARGUS plugin initialized successfully'
         },
         {
-          time: new Date(Date.now() - 60000),
+          time: Date.now() - 60000,
           message: 'Web dashboard started on port 30000'
         },
         {
-          time: new Date(Date.now() - 120000),
+          time: Date.now() - 120000,
           message: 'MCP server connected'
         }
       ];
 
+      if (activities.length === 0) {
+        return `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>No recent activity.</p>
+          </div>
+        `;
+      }
+
       return activities.map(activity => `
         <div class="activity-item">
-          <div class="activity-time">${formatDuration((Date.now() - activity.getTime()) / 1000)} ago</div>
+          <div class="activity-time">${formatDuration((Date.now() - activity.time) / 1000)} ago</div>
           <div class="activity-message">${activity.message}</div>
         </div>
       `).join('');
@@ -697,13 +705,18 @@
     // Render server info
     function renderServerInfo(status) {
       if (!status) {
-        return `<div class="error"><p>Unable to load server info</p></div>`;
+        return `
+          <div class="metric">
+            <span class="metric-label">Status</span>
+            <span class="metric-value error">Disconnected</span>
+          </div>
+        `;
       }
 
       return `
         <div class="metric">
           <span class="metric-label">Version</span>
-          <span class="metric-value">${status.version || '0.5.0'}</span>
+          <span class="metric-value">${status.version || '0.5.2'}</span>
         </div>
         <div class="metric">
           <span class="metric-label">Platform</span>
@@ -740,21 +753,33 @@
 
     // Load all data
     async function loadData() {
-      const [stats, status] = await Promise.all([
-        fetchStats(),
-        fetchServerStatus()
-      ]);
+      try {
+        const [stats, status] = await Promise.all([
+          fetchStats().catch(err => {
+            console.error('Stats fetch failed:', err);
+            return null;
+          }),
+          fetchServerStatus().catch(err => {
+            console.error('Status fetch failed:', err);
+            return null;
+          })
+        ]);
 
-      // Update UI
-      document.getElementById('indexStats').innerHTML = renderIndexStats(stats);
-      document.getElementById('memoryStats').innerHTML = renderMemoryStats(stats);
-      document.getElementById('mcpTools').innerHTML = renderMCPTools();
-      document.getElementById('projectsList').innerHTML = renderProjects();
-      document.getElementById('activityList').innerHTML = renderActivity();
-      document.getElementById('serverInfo').innerHTML = renderServerInfo(status);
+        // Update UI with fetched data
+        document.getElementById('indexStats').innerHTML = renderIndexStats(stats);
+        document.getElementById('memoryStats').innerHTML = renderMemoryStats(stats);
+        document.getElementById('mcpTools').innerHTML = renderMCPTools();
+        document.getElementById('projectsList').innerHTML = renderProjects();
+        document.getElementById('activityList').innerHTML = renderActivity();
+        document.getElementById('serverInfo').innerHTML = renderServerInfo(status);
 
-      // Update status
-      updateStatus(stats !== null || status !== null);
+        // Update status badge
+        updateStatus(stats !== null || status !== null);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        // Show error state but keep UI functional
+        updateStatus(false);
+      }
     }
 
     // Refresh data
