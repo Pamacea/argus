@@ -41,16 +41,32 @@ async function postResponse(response, context) {
   }
 }
 
-// Main execution
+// Main execution - Claude Code passes data via stdin
 (async () => {
   try {
-    const response = process.env.ARGUS_CLAUDE_RESPONSE || '';
-    const context = JSON.parse(process.env.ARGUS_CONTEXT || '{}');
+    // Read from stdin as per Claude Code hooks specification
+    let inputData = {};
+    try {
+      const stdinBuffer = [];
+      for await (const chunk of process.stdin) {
+        stdinBuffer.push(chunk);
+      }
+      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
+      if (stdinData.trim()) {
+        inputData = JSON.parse(stdinData);
+      }
+    } catch (e) {
+      // No stdin data or invalid JSON - try env vars as fallback
+    }
+
+    // Claude Code passes: { response, context } via stdin
+    const response = inputData.response || process.env.ARGUS_CLAUDE_RESPONSE || '';
+    const context = inputData.context || JSON.parse(process.env.ARGUS_CONTEXT || '{}');
 
     await postResponse(response, context);
     process.exit(0);
   } catch (error) {
-    console.error('[ARGUS] Error in post-response hook:', error);
+    console.error('[ARGUS] Error in post-response hook:', error.message);
     process.exit(0); // Don't fail the hook
   }
 })();

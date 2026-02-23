@@ -66,7 +66,7 @@ async function postEdit(toolName, args, result) {
   });
 
   // Also queue as a transaction for memory
-  const changeSummary = `${operation}: ${path.basename(filePath)}`;
+  let changeSummary = `${operation}: ${path.basename(filePath)}`;
   if (oldContent && newContent) {
     const oldLines = oldContent.split('\n').length;
     const newLines = newContent.split('\n').length;
@@ -95,12 +95,28 @@ async function postEdit(toolName, args, result) {
   console.log(`[ARGUS] ✓ Tracked edit: ${filePath}`);
 }
 
-// Main execution
+// Main execution - Claude Code passes data via stdin
 (async () => {
   try {
-    const toolName = process.env.ARGUS_TOOL_NAME || 'unknown';
-    const args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
-    const result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
+    // Read from stdin as per Claude Code hooks specification
+    let inputData = {};
+    try {
+      const stdinBuffer = [];
+      for await (const chunk of process.stdin) {
+        stdinBuffer.push(chunk);
+      }
+      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
+      if (stdinData.trim()) {
+        inputData = JSON.parse(stdinData);
+      }
+    } catch (e) {
+      // No stdin data or invalid JSON - try env vars as fallback
+    }
+
+    // Claude Code passes: { toolName, args, result } via stdin
+    const toolName = inputData.toolName || process.env.ARGUS_TOOL_NAME || 'unknown';
+    const args = inputData.args || JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+    const result = inputData.result || JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
 
     // Only process Edit/Write operations
     if (['Edit', 'Write', 'NotebookEdit'].includes(toolName)) {
@@ -109,7 +125,7 @@ async function postEdit(toolName, args, result) {
 
     process.exit(0);
   } catch (error) {
-    console.error('[ARGUS] Error in post-edit hook:', error);
+    console.error('[ARGUS] Error in post-edit hook:', error.message);
     process.exit(0); // Don't fail the hook
   }
 })();

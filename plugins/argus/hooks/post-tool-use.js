@@ -70,26 +70,46 @@ async function postToolUse(toolName, args, result) {
   }
 }
 
-// Main execution
+// Main execution - Claude Code passes data via stdin
 (async () => {
   try {
-    const toolName = process.env.ARGUS_TOOL_NAME || 'unknown';
-    let args = {};
-    let result = {};
-
-    // Parse args safely
+    // Read from stdin as per Claude Code hooks specification
+    let inputData = {};
     try {
-      args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+      const stdinBuffer = [];
+      for await (const chunk of process.stdin) {
+        stdinBuffer.push(chunk);
+      }
+      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
+      if (stdinData.trim()) {
+        inputData = JSON.parse(stdinData);
+      }
     } catch (e) {
-      console.error('[ARGUS] Failed to parse args:', e.message);
+      // No stdin data - continue to env var fallback
     }
 
-    // Parse result safely - might not be JSON
-    try {
-      result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
-    } catch (e) {
-      // Result might not be JSON, use as-is
-      result = { output: process.env.ARGUS_TOOL_RESULT || '' };
+    // Claude Code passes: { toolName, args, result } via stdin
+    const toolName = inputData.toolName || process.env.ARGUS_TOOL_NAME || 'unknown';
+    let args = inputData.args || {};
+    let result = inputData.result || {};
+
+    // Fallback to env vars for args if not in stdin
+    if (Object.keys(args).length === 0) {
+      try {
+        args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+      } catch (e) {
+        console.error('[ARGUS] Failed to parse args:', e.message);
+      }
+    }
+
+    // Fallback to env vars for result if not in stdin
+    if (Object.keys(result).length === 0) {
+      try {
+        result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
+      } catch (e) {
+        // Result might not be JSON, use as-is
+        result = { output: process.env.ARGUS_TOOL_RESULT || '' };
+      }
     }
 
     await postToolUse(toolName, args, result);

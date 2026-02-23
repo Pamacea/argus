@@ -29,31 +29,32 @@ async function prePrompt(prompt, context) {
   }
 }
 
-// Main execution
+// Main execution - Claude Code passes data via stdin
 (async () => {
   try {
-    // Get prompt from environment or stdin
-    let prompt = process.env.ARGUS_USER_PROMPT || '';
-    let context = process.env.ARGUS_CONTEXT || '{}';
-
-    // If no env var, read from stdin
-    if (!prompt) {
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      prompt = await new Promise(resolve => {
-        rl.question('', resolve);
-      });
-      rl.close();
+    // Read from stdin as per Claude Code hooks specification
+    let inputData = {};
+    try {
+      const stdinBuffer = [];
+      for await (const chunk of process.stdin) {
+        stdinBuffer.push(chunk);
+      }
+      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
+      if (stdinData.trim()) {
+        inputData = JSON.parse(stdinData);
+      }
+    } catch (e) {
+      // No stdin data - continue
     }
 
-    await prePrompt(prompt, JSON.parse(context));
+    // Claude Code passes: { prompt, context } via stdin
+    let prompt = inputData.prompt || process.env.ARGUS_USER_PROMPT || '';
+    let context = inputData.context || JSON.parse(process.env.ARGUS_CONTEXT || '{}');
+
+    await prePrompt(prompt, context);
     process.exit(0);
   } catch (error) {
-    console.error('[ARGUS] Error in pre-prompt hook:', error);
+    console.error('[ARGUS] Error in pre-prompt hook:', error.message);
     process.exit(0); // Don't fail the hook
   }
 })();
