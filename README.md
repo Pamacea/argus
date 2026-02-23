@@ -1,6 +1,6 @@
 # ARGUS Marketplace
 
-> **v0.5.4** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action.
+> **v0.5.5** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action.
 
 ## 📦 Plugins
 
@@ -10,8 +10,21 @@ Le plugin ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur ave
 - ✅ Mémoire des prompts précédents
 - ✅ Recherche sémantique locale (TF-IDF) ou vectorielle (Qdrant)
 - ✅ Index automatique complet des fichiers (racine du projet)
+- ✅ Historique des conversations (style Claude-mem)
 - ✅ Documentation du projet
 - ✅ Visualisation des projets indexés
+
+## 🆕 v0.5.5 Nouveautés
+
+### Bug Fixes Critiques
+- **Search Memory** : Corrige le bug `TypeError: allTransactions.map is not a function`
+- **Queue System** : Format JSONL corrigé pour fiabilité maximale
+- **Dashboard Stats** : Affiche maintenant les vraies statistiques de la base
+
+### Nouvelles Fonctionnalités
+- **Queue Processor** : Traite automatiquement les files d'attente toutes les 5 secondes
+- **Prompt/Response Capture** : Historique complet de vos interactions
+- **Transaction Indexing** : Indexation automatique pour la recherche sémantique
 
 ## 🆕 v0.5.4 Nouveautés
 

@@ -432,7 +432,7 @@ async function autoIndexProject(projectDir, pluginRoot) {
 
   const lastIndexed = getLastIndexTime(projectDir);
   const now = Date.now();
-  const INDEX_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+  const INDEX_THRESHOLD = 3 * 60 * 60 * 1000; // 3 hours (au lieu de 24h)
 
   // Check if we should re-index
   const shouldIndex = lastIndexed === 0 || (now - lastIndexed) > INDEX_THRESHOLD;

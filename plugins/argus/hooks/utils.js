@@ -12,9 +12,9 @@ const SESSION_STATE_PATH = path.join(process.env.CLAUDE_PLUGIN_ROOT, '.session-s
 // Use absolute path for data directory
 const ARGUS_HOME = path.join(os.homedir(), '.argus');
 const QUEUE_DIR = path.join(ARGUS_HOME, 'queue');
-const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.json');
-const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.json');
-const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.json');
+const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.jsonl');
+const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.jsonl');
+const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.jsonl');
 
 /**
  * Ensure queue directory exists
@@ -30,69 +30,106 @@ function ensureQueueDir() {
 }
 
 /**
- * Load queue from file
+ * Read queue from JSONL file (returns array of parsed objects)
  */
-function loadQueue(filePath) {
+function readQueue(filePath) {
   try {
+    ensureQueueDir();
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(data);
+      const lines = data.trim().split('\n').filter(l => l);
+      return lines.map(line => {
+        try {
+          return JSON.parse(line);
+        } catch (e) {
+          console.error('[ARGUS] Failed to parse queue line:', line.substring(0, 100));
+          return null;
+        }
+      }).filter(item => item !== null);
     }
   } catch (error) {
-    console.error(`[ARGUS] Failed to load queue from ${filePath}:`, error.message);
+    console.error(`[ARGUS] Failed to read queue from ${filePath}:`, error.message);
   }
   return [];
 }
 
 /**
- * Save queue to file
+ * Clear queue file
  */
-function saveQueue(filePath, queue) {
+function clearQueue(filePath) {
   try {
-    ensureQueueDir();
-    fs.writeFileSync(filePath, JSON.stringify(queue, null, 2));
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   } catch (error) {
-    console.error(`[ARGUS] Failed to save queue to ${filePath}:`, error.message);
+    console.error(`[ARGUS] Failed to clear queue ${filePath}:`, error.message);
+  }
+}
+function ensureQueueDir() {
+  try {
+    if (!fs.existsSync(QUEUE_DIR)) {
+      fs.mkdirSync(QUEUE_DIR, { recursive: true });
+    }
+  } catch (error) {
+    console.error('[ARGUS] Failed to create queue dir:', error.message);
   }
 }
 
 /**
- * Queue an edit operation for later processing
+ * Queue an edit operation for later processing (JSONL format)
  */
 function queueEdit(editData) {
-  const queue = loadQueue(EDIT_QUEUE_PATH);
-  queue.push({
-    ...editData,
-    timestamp: Date.now()
-  });
-  saveQueue(EDIT_QUEUE_PATH, queue);
-  console.log('[ARGUS] ✓ Queued edit for processing');
+  try {
+    ensureQueueDir();
+    const entry = JSON.stringify({
+      type: 'edit',
+      ...editData,
+      timestamp: Date.now(),
+      pid: process.pid
+    });
+    fs.appendFileSync(EDIT_QUEUE_PATH, entry + '\n');
+    console.log('[ARGUS] ✓ Queued edit for processing');
+  } catch (error) {
+    console.error('[ARGUS] Failed to queue edit:', error.message);
+  }
 }
 
 /**
- * Queue a transaction for memory storage
+ * Queue a transaction for memory storage (JSONL format)
  */
 function queueTransaction(transaction) {
-  const queue = loadQueue(TRANSACTION_QUEUE_PATH);
-  queue.push({
-    ...transaction,
-    timestamp: Date.now()
-  });
-  saveQueue(TRANSACTION_QUEUE_PATH, queue);
-  console.log('[ARGUS] ✓ Queued transaction for memory');
+  try {
+    ensureQueueDir();
+    const entry = JSON.stringify({
+      type: 'transaction',
+      ...transaction,
+      timestamp: Date.now(),
+      pid: process.pid
+    });
+    fs.appendFileSync(TRANSACTION_QUEUE_PATH, entry + '\n');
+    console.log('[ARGUS] ✓ Queued transaction for memory');
+  } catch (error) {
+    console.error('[ARGUS] Failed to queue transaction:', error.message);
+  }
 }
 
 /**
- * Queue a prompt for analysis
+ * Queue a prompt for analysis (JSONL format)
  */
 function queuePrompt(promptData) {
-  const queue = loadQueue(PROMPT_QUEUE_PATH);
-  queue.push({
-    ...promptData,
-    timestamp: Date.now()
-  });
-  saveQueue(PROMPT_QUEUE_PATH, queue);
-  console.log('[ARGUS] ✓ Queued prompt for analysis');
+  try {
+    ensureQueueDir();
+    const entry = JSON.stringify({
+      type: 'prompt',
+      ...promptData,
+      timestamp: Date.now(),
+      pid: process.pid
+    });
+    fs.appendFileSync(PROMPT_QUEUE_PATH, entry + '\n');
+    console.log('[ARGUS] ✓ Queued prompt for analysis');
+  } catch (error) {
+    console.error('[ARGUS] Failed to queue prompt:', error.message);
+  }
 }
 
 /**
@@ -199,6 +236,9 @@ module.exports = {
   queueEdit,
   queueTransaction,
   queuePrompt,
+  readQueue,
+  clearQueue,
+  ensureQueueDir,
   SESSION_STATE_PATH,
   EDIT_QUEUE_PATH,
   TRANSACTION_QUEUE_PATH,

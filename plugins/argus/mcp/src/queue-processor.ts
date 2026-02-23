@@ -6,7 +6,6 @@
  * This processor polls the queue and processes items.
  */
 
-import { readQueue, clearQueue } from '../../hooks/utils.js';
 import { getStorage } from './storage/index.js';
 import { getRAGEngine } from './rag/index.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,9 +14,60 @@ import path from 'path';
 import os from 'os';
 
 const QUEUE_DIR = path.join(os.homedir(), '.argus', 'queue');
-const TRANSACTION_QUEUE = path.join(QUEUE_DIR, 'transactions.jsonl');
+const TRANSACTION_QUEUE_NEW = path.join(QUEUE_DIR, 'transactions.jsonl');
+const TRANSACTION_QUEUE_OLD = path.join(QUEUE_DIR, 'transactions.json');
 const PROMPT_QUEUE = path.join(QUEUE_DIR, 'prompts.jsonl');
 const EDIT_QUEUE = path.join(QUEUE_DIR, 'edits.jsonl');
+
+/**
+ * Read queue from JSONL or JSON file (returns array of parsed objects)
+ */
+function readQueue(filePath: string): any[] {
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+
+      // Check if it's JSONL (one JSON object per line)
+      if (filePath.endsWith('.jsonl')) {
+        const lines = data.trim().split('\n').filter((l: string) => l);
+        return lines.map((line: string) => {
+          try {
+            return JSON.parse(line);
+          } catch (e) {
+            console.error('[ARGUS] Failed to parse queue line:', line.substring(0, 100));
+            return null;
+          }
+        }).filter((item: any) => item !== null);
+      }
+      // Old JSON format - array of objects
+      else if (filePath.endsWith('.json')) {
+        try {
+          const parsed = JSON.parse(data);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.error('[ARGUS] Failed to parse JSON queue:', e);
+          return [];
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[ARGUS] Failed to read queue from ${filePath}:`, error);
+  }
+  return [];
+}
+
+/**
+ * Clear queue file
+ */
+function clearQueue(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error(`[ARGUS] Failed to clear queue ${filePath}:`, error);
+  }
+}
 
 interface QueuedItem {
   type: string;
@@ -112,13 +162,21 @@ export class QueueProcessor {
    * Process transaction queue
    */
   private async processTransactionQueue() {
-    const items = readQueue(TRANSACTION_QUEUE);
+    // Try new format first, then old format
+    let items = readQueue(TRANSACTION_QUEUE_NEW);
+    let queueFile = TRANSACTION_QUEUE_NEW;
+
+    if (items.length === 0) {
+      // Try old format
+      items = readQueue(TRANSACTION_QUEUE_OLD);
+      queueFile = TRANSACTION_QUEUE_OLD;
+    }
 
     if (items.length === 0) {
       return;
     }
 
-    console.log(`[ARGUS Queue] Processing ${items.length} transactions`);
+    console.log(`[ARGUS Queue] Processing ${items.length} transactions from ${path.basename(queueFile)}`);
 
     let saved = 0;
     let failed = 0;
@@ -169,7 +227,7 @@ export class QueueProcessor {
 
     // Clear queue after processing
     if (saved > 0 || failed > 0) {
-      clearQueue(TRANSACTION_QUEUE);
+      clearQueue(queueFile);
       console.log(`[ARGUS Queue] ✓ Saved ${saved} transactions${failed > 0 ? `, ${failed} failed` : ''}`);
     }
   }
@@ -287,7 +345,7 @@ export class QueueProcessor {
    */
   getStats() {
     const stats = {
-      transactionQueue: this.countQueueLines(TRANSACTION_QUEUE),
+      transactionQueue: this.countQueueLines(TRANSACTION_QUEUE_NEW) + this.countQueueLines(TRANSACTION_QUEUE_OLD),
       promptQueue: this.countQueueLines(PROMPT_QUEUE),
       editQueue: this.countQueueLines(EDIT_QUEUE),
       isProcessing: this.isProcessing
@@ -306,10 +364,26 @@ export class QueueProcessor {
       }
 
       const content = fs.readFileSync(queuePath, 'utf8');
-      return content.trim().split('\n').filter(l => l).length;
+
+      // For JSONL files, count lines
+      if (queuePath.endsWith('.jsonl')) {
+        return content.trim().split('\n').filter(l => l).length;
+      }
+      // For JSON files, try to parse and count array items
+      else if (queuePath.endsWith('.json')) {
+        try {
+          const parsed = JSON.parse(content);
+          return Array.isArray(parsed) ? parsed.length : 0;
+        } catch {
+          // Fallback: count by pattern matching
+          const matches = content.match(/"promptType"/g);
+          return matches ? matches.length : 0;
+        }
+      }
     } catch (error) {
       return 0;
     }
+    return 0;
   }
 }
 

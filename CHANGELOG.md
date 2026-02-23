@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.5] - 2026-02-23
+
+### 🐛 Bug Fixes
+
+#### Search Memory Bug Fixed
+- **Missing await** : Fixed `argus__search_memory` TypeError
+- **Async handling** : Added proper await for `searchTransactions()` and `getAllHooks()`
+- **Better scoring** : Improved text similarity calculation for local search
+- **Lower threshold** : Default threshold now 0.3 for better results
+
+#### Queue System Fixed
+- **JSONL format** : Queue files now use JSONL (one JSON per line) format
+- **Proper paths** : Fixed queue file extensions from `.json` to `.jsonl`
+- **Export functions** : Added `readQueue` and `clearQueue` exports to utils.js
+- **Queue directory** : Auto-created when needed
+
+### 🚀 Features
+
+#### Queue Processor Integration
+- **Auto-start** : Queue processor starts with MCP server
+- **5-second interval** : Processes queued items every 5 seconds
+- **Transaction indexing** : Automatically indexes queued transactions to RAG
+- **Edit tracking** : Logs file edits to `~/.argus/edits.log`
+- **Prompt logging** : Logs prompts to `~/.argus/prompts.log`
+
+#### Prompt/Response Capture
+- **Hook integration** : PostToolUse and PostEdit hooks queue all actions
+- **Transaction format** : Captures prompt, context, result, and metadata
+- **Auto-tagging** : Tags transactions with tool names and categories
+- **Session tracking** : Tracks transactions per session (cwd-based)
+
+### 📝 Technical Details
+
+**Modified Files:**
+- `mcp/src/rag/engine.ts` - Fixed async/await in local search fallback
+- `mcp/src/index.ts` - Added queue processor initialization
+- `hooks/utils.js` - Fixed queue format (JSONL) and exports
+- `hooks/post-tool-use.js` - Simplified to use queueTransaction
+- `.claude-plugin/marketplace.json` - Updated version to 0.5.5
+- `.claude-plugin/plugin.json` - Updated version to 0.5.5
+
+**Improvements:**
+- Better error handling in queue operations
+- More reliable file I/O with JSONL format
+- Cleaner transaction flow from hooks to database
+- Improved search result quality
+
+---
+
 ## [0.5.4] - 2026-02-23
 
 ### 🚀 Auto-Index Amélioré

@@ -119,7 +119,7 @@ export class RAGEngine {
     if (this.config.useLocal) {
       console.log('[ARGUS] Using local semantic search (Qdrant disabled)');
       this.useLocalSearch = true;
-      this.loadLocalIndex();
+      await this.loadLocalIndex();
       return;
     }
 
@@ -150,16 +150,16 @@ export class RAGEngine {
       console.warn('[ARGUS] Qdrant not available, falling back to local search:', error);
       this.qdrant = null;
       this.useLocalSearch = true;
-      this.loadLocalIndex();
+      await this.loadLocalIndex();
     }
   }
 
   /**
    * Load local search index from storage
    */
-  private loadLocalIndex(): void {
+  private async loadLocalIndex(): Promise<void> {
     try {
-      const transactions = this.storage.getAllTransactions();
+      const transactions = await this.storage.getAllTransactions();
       for (const tx of transactions) {
         const text = `${tx.prompt.raw}\n${tx.result.output || ''}`;
         this.localSearch.index({
@@ -320,21 +320,15 @@ export class RAGEngine {
           confidence: results[0]?.score || 0
         };
       } else {
-        // Fallback to local search using SQLite embeddings
-        const allTransactions = this.storage.searchTransactions(query.query, limit * 2);
-        const allHooks = this.storage.getAllHooks();
+        // Fallback to local search using SQLite text search
+        const allTransactions = await this.storage.searchTransactions(query.query, limit * 2);
+        const allHooks = await this.storage.getAllHooks();
 
         // Score transactions by similarity
-        const scoredTransactions = allTransactions.map(tx => {
-          const stored = this.storage.getTransaction(tx.id);
-          if (!stored) return { tx, score: 0 };
-
-          // Get stored embedding (simplified - would need to retrieve from DB)
-          return {
-            tx,
-            score: this.calculateTextSimilarity(query.query, tx.prompt.raw)
-          };
-        }).filter(s => s.score > (query.threshold || 0.5))
+        const scoredTransactions = allTransactions.map(tx => ({
+          tx,
+          score: this.calculateTextSimilarity(query.query, `${tx.prompt.raw} ${tx.result.output || ''}`)
+        })).filter(s => s.score > (query.threshold || 0.3))
           .sort((a, b) => b.score - a.score)
           .slice(0, limit);
 
@@ -342,14 +336,14 @@ export class RAGEngine {
         const scoredHooks = allHooks.map(hook => ({
           hook,
           score: this.calculateTextSimilarity(query.query, `${hook.name} ${hook.description}`)
-        })).filter(s => s.score > (query.threshold || 0.5))
+        })).filter(s => s.score > (query.threshold || 0.3))
           .sort((a, b) => b.score - a.score)
           .slice(0, limit);
 
         return {
           hooks: scoredHooks.map(s => s.hook),
           relevantTransactions: scoredTransactions.map(s => s.tx),
-          confidence: scoredTransactions[0]?.score || 0
+          confidence: scoredTransactions[0]?.score || 0.5
         };
       }
     } catch (error) {

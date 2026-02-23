@@ -20,6 +20,7 @@ import {
   handleSearchCode,
   handleGetStats,
 } from './handlers/tools.js';
+import { getQueueProcessor } from './queue-processor.js';
 
 // Create MCP server
 const server = new Server(
@@ -399,6 +400,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Start server
 async function main() {
+  // Start queue processor to process queued items from hooks
+  const queueProcessor = getQueueProcessor();
+  queueProcessor.start(5000); // Process every 5 seconds
+  console.error('[ARGUS] Queue processor started');
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('ARGUS MCP Server running on stdio');

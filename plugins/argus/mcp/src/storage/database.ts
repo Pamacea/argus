@@ -146,6 +146,9 @@ export class Storage {
       await this.ensureInitialized();
       if (!this.db) throw new Error('Database not initialized');
 
+      // Helper to convert undefined to null
+      const toNull = (value: any): any => value === undefined ? null : value;
+
       this.db.run(`
         INSERT INTO transactions (
           id, timestamp, session_id,
@@ -161,19 +164,19 @@ export class Storage {
         tx.sessionId,
         tx.prompt.raw,
         tx.prompt.type,
-        tx.context.cwd,
-        JSON.stringify(tx.context.environment),
-        tx.context.platform,
-        JSON.stringify(tx.context.toolsAvailable),
-        JSON.stringify(tx.context.files),
+        toNull(tx.context.cwd),
+        toNull(JSON.stringify(tx.context.environment)),
+        toNull(tx.context.platform),
+        toNull(JSON.stringify(tx.context.toolsAvailable)),
+        toNull(JSON.stringify(tx.context.files)),
         tx.result.success ? 1 : 0,
-        tx.result.output,
-        tx.result.error,
-        tx.result.duration,
-        JSON.stringify(tx.result.toolsUsed),
-        JSON.stringify(tx.metadata.tags),
-        tx.metadata.category || null,
-        JSON.stringify(tx.metadata.relatedHooks),
+        toNull(tx.result.output),
+        toNull(tx.result.error),
+        tx.result.duration || 0,
+        toNull(JSON.stringify(tx.result.toolsUsed)),
+        toNull(JSON.stringify(tx.metadata.tags)),
+        toNull(tx.metadata.category),
+        toNull(JSON.stringify(tx.metadata.relatedHooks)),
         embedding ? Buffer.from(embedding.buffer) : null
       ]);
 
@@ -243,6 +246,29 @@ export class Storage {
       LIMIT ? OFFSET ?
     `);
     stmt.bind([start, end, limit, offset]);
+
+    const results: Transaction[] = [];
+    while (stmt.step()) {
+      results.push(this.rowToTransaction(stmt.getAsObject<any>()));
+    }
+    stmt.free();
+
+    return results;
+  }
+
+  /**
+   * Get all transactions (for local search index loading)
+   */
+  async getAllTransactions(limit: number = 10000): Promise<Transaction[]> {
+    await this.ensureInitialized();
+    if (!this.db) return [];
+
+    const stmt = this.db.prepare(`
+      SELECT * FROM transactions
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `);
+    stmt.bind([limit]);
 
     const results: Transaction[] = [];
     while (stmt.step()) {

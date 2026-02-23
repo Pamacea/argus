@@ -3,11 +3,10 @@
 /**
  * Post-Tool Use Hook
  *
- * Captures tool results and saves them to ARGUS memory for learning.
+ * Captures tool results and queues them for ARGUS memory processing.
  */
 
-const { execSync } = require('child_process');
-const path = require('path');
+const { queueTransaction } = require('./utils');
 
 async function postToolUse(toolName, args, result) {
   console.log(`[ARGUS] Post-tool: ${toolName}`);
@@ -17,41 +16,40 @@ async function postToolUse(toolName, args, result) {
     return;
   }
 
-  // Skip tools that don't produce meaningful results
-  const skipTools = ['Read', 'Glob', 'Grep', 'Bash'];
+  // Skip tools that don't produce meaningful results for learning
+  const skipTools = ['Read', 'Glob', 'Grep', 'AskUserQuestion'];
   if (skipTools.includes(toolName)) {
     return;
   }
 
-  // Try to call argus__save_transaction via MCP if available
-  // Note: This is a best-effort attempt - hooks run in a separate process
   try {
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
-    if (!pluginRoot) {
-      return; // No plugin root, can't save
-    }
-
-    // Extract meaningful info for storage
-    const transaction = {
-      prompt: `${toolName} - ${JSON.stringify(args).slice(0, 100)}`,
-      action: 'tool_execution',
+    // Queue transaction for processing by MCP server
+    queueTransaction({
+      prompt: `${toolName} called`,
+      promptType: 'tool',
       context: {
-        tool_name: toolName,
-        args: JSON.stringify(args),
-        timestamp: new Date().toISOString()
+        cwd: process.cwd(),
+        platform: process.platform,
+        toolsAvailable: [],
+        environment: process.env
       },
-      result: typeof result === 'string' ? result.slice(0, 500) : JSON.stringify(result).slice(0, 500),
-      tags: [toolName, 'auto_captured']
-    };
+      result: {
+        success: true,
+        output: typeof result === 'string' ? result : JSON.stringify(result),
+        duration: 0,
+        toolsUsed: [toolName]
+      },
+      metadata: {
+        tags: [toolName, 'auto_captured'],
+        category: 'tool_execution'
+      }
+    });
 
-    // Note: We can't directly call MCP tools from hooks
-    // The MCP server will need to poll or we need IPC
-    // For now, just log that we captured it
-    console.log(`[ARGUS] ✓ Captured: ${toolName}`);
+    console.log(`[ARGUS] ✓ Queued: ${toolName}`);
 
   } catch (error) {
     // Silently fail - don't break hooks on save error
-    console.error(`[ARGUS] Warning: Could not save transaction:`, error.message);
+    console.error(`[ARGUS] Warning: Could not queue transaction:`, error.message);
   }
 }
 

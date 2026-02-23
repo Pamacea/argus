@@ -246,18 +246,81 @@ async function handleRequest(req, res) {
   // Stats endpoint - get ARGUS statistics
   if (url.pathname === '/api/stats' && req.method === 'GET') {
     try {
-      // Try to read stats from the data directory
-      const statsPath = join(DATA_DIR, 'stats.json');
-      let stats = { usingQdrant: false, transactionCount: 0, hookCount: 0 };
+      // Calculate stats from actual data
+      const stats = {
+        usingQdrant: false, // TODO: detect if Qdrant is running
+        transactionCount: 0,
+        hookCount: 0,
+        indexedFileCount: 0,
+        memorySize: 0,
+        lastIndexTime: 0
+      };
 
-      if (existsSync(statsPath)) {
-        try {
-          const statsData = readFileSync(statsPath, 'utf-8');
-          stats = JSON.parse(statsData);
-        } catch (e) {
-          // Use default stats if file is corrupted
+      // Count indexed files from index files
+      try {
+        const fsPromises = await import('fs/promises');
+        const files = await fsPromises.readdir(DATA_DIR);
+        const indexFiles = files.filter(f => f.startsWith('index-') && f.endsWith('.json'));
+
+        for (const indexFile of indexFiles) {
+          try {
+            const content = await fsPromises.readFile(join(DATA_DIR, indexFile), 'utf-8');
+            const data = JSON.parse(content);
+            stats.indexedFileCount += data.fileCount || 0;
+
+            // Track latest index time
+            const indexTime = data.lastIndexTime || data.timestamp || 0;
+            if (indexTime > stats.lastIndexTime) {
+              stats.lastIndexTime = indexTime;
+            }
+          } catch (e) {
+            // Skip corrupted index files
+            console.error('[ARGUS Web] Error reading index file:', indexFile, e.message);
+          }
         }
+      } catch (e) {
+        console.error('[ARGUS Web] Error counting indexed files:', e.message);
       }
+
+      // Get database size
+      try {
+        const fsPromises = await import('fs/promises');
+        const dbPath = join(DATA_DIR, 'argus.db');
+        const dbStat = await fsPromises.stat(dbPath);
+        stats.memorySize = dbStat.size;
+      } catch (e) {
+        // Database might not exist
+        console.error('[ARGUS Web] Error getting database size:', e.message);
+      }
+
+      // Count transactions from queue files
+      try {
+        const queueDir = join(DATA_DIR, 'queue');
+
+        // Check new JSONL format
+        const newQueuePath = join(queueDir, 'transactions.jsonl');
+        if (existsSync(newQueuePath)) {
+          const content = readFileSync(newQueuePath, 'utf-8');
+          const lines = content.trim().split('\n').filter(l => l);
+          stats.transactionCount += lines.length;
+        }
+
+        // Check old JSON format
+        const oldQueuePath = join(queueDir, 'transactions.json');
+        if (existsSync(oldQueuePath)) {
+          const content = readFileSync(oldQueuePath, 'utf-8');
+          // For large JSON files, count objects by looking for patterns
+          const matches = content.match(/"promptType"/g);
+          if (matches) {
+            stats.transactionCount += matches.length;
+          }
+        }
+      } catch (e) {
+        console.error('[ARGUS Web] Error counting transactions:', e.message);
+      }
+
+      // Hook count is fixed for now
+      stats.hookCount = 4; // SessionStart, PreToolUse, PostToolUse, Stop
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

@@ -72,20 +72,59 @@ export class FileIndexer {
     const indexedFiles: IndexedFile[] = [];
     const startTime = Date.now();
 
+    // Safety timeout: if indexing takes more than 5 minutes, stop
+    const MAX_INDEX_TIME = 5 * 60 * 1000; // 5 minutes
+
     console.log(`Starting indexing of ${this.config.rootPath}`);
 
     const files = this.scanFiles(this.config.rootPath);
     console.log(`Found ${files.length} files to index`);
 
-    for (const filePath of files) {
-      const result = await this.indexFile(filePath);
-      if (result) {
-        indexedFiles.push(result);
+    // Process files in batches to avoid memory overflow
+    const BATCH_SIZE = 10;
+    let stoppedEarly = false;
+
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      // Check timeout
+      if (Date.now() - startTime > MAX_INDEX_TIME) {
+        console.log(`⚠️  Indexing timeout reached (${MAX_INDEX_TIME/1000}s), stopping early`);
+        console.log(`✅ Indexed ${indexedFiles.length} files so far`);
+        stoppedEarly = true;
+        break;
+      }
+
+      const batch = files.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(files.length / BATCH_SIZE)} (${batch.length} files)`);
+
+      for (const filePath of batch) {
+        try {
+          const result = await this.indexFile(filePath);
+          if (result) {
+            indexedFiles.push(result);
+          }
+        } catch (error) {
+          console.error(`Failed to index ${filePath}:`, error.message);
+        }
+
+        // Force garbage collection between files
+        if (global.gc) {
+          global.gc();
+        }
+      }
+
+      // Force garbage collection between batches
+      if (global.gc) {
+        global.gc();
       }
     }
 
     const duration = Date.now() - startTime;
-    console.log(`Indexed ${indexedFiles.length} files in ${duration}ms`);
+
+    if (stoppedEarly) {
+      console.log(`⏱️  Indexing stopped after ${duration}ms due to timeout (more files remain)`);
+    } else {
+      console.log(`✅ Indexed ${indexedFiles.length} files in ${duration}ms`);
+    }
 
     return indexedFiles;
   }

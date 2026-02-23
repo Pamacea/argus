@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.3 | **License:** MIT
+**Version:** 0.5.5 | **License:** MIT
 
 ---
 
@@ -14,7 +14,17 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.3)
+## ✨ Key Features (v0.5.5)
+
+### 🐛 Critical Bug Fixes
+- **Search Memory Fixed** - No more `TypeError: allTransactions.map is not a function`
+- **Queue System Fixed** - JSONL format for reliable persistence
+- **Dashboard Stats Fixed** - Shows real data from database
+
+### 🚀 New Features
+- **Queue Processor** - Auto-processes queued items every 5 seconds
+- **Prompt/Response Capture** - Complete conversation history (Claude-mem style)
+- **Transaction Indexing** - Automatic indexing for semantic search
 
 ### 🔍 Dual-Mode Semantic Search
 - **Local Search (TF-IDF)** - Works without Docker, zero external dependencies

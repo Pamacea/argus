@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente
 
-> **v0.5.4** - Force l'IA à devenir un collaborateur context-aware en consultant le RAG, l'index et la documentation avant toute action.
+> **v0.5.5** - Force l'IA à devenir un collaborateur context-aware en consultant le RAG, l'index et la documentation avant toute action.
 
 ## 🎯 Vision
 
@@ -9,7 +9,20 @@ ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur averti qui ne
 - ✅ Recherche sémantique locale (TF-IDF) ou vectorielle (Qdrant optionnel)
 - ✅ Index automatique complet (racine du projet)
 - ✅ Documentation du projet
+- ✅ Historique des conversations (style Claude-mem)
 - ✅ Visualisation multi-projets
+
+## 🆕 v0.5.5 Nouveautés
+
+### Bug Fixes Critiques
+- **Search Memory** : Corrige le bug `TypeError: allTransactions.map is not a function`
+- **Queue System** : Format JSONL corrigé pour fiabilité maximale
+- **Async/Await** : Ajouté les `await` manquants dans le RAG engine
+
+### Prompt/Response Capture
+- **Historique complet** : Capture toutes vos interactions avec Claude
+- **Queue Processor** : Traite automatiquement les files d'attente toutes les 5 secondes
+- **Indexation auto** : Les transactions sont indexées pour la recherche sémantique
 
 ## 🆕 v0.5.4 Nouveautés
 
