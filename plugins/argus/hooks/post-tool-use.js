@@ -7,6 +7,83 @@
  */
 
 const { queueTransaction } = require('./utils');
+const {
+  getEnhancedSummary,
+  trackFileModification,
+  trackCommand,
+  loadContext
+} = require('./context-tracker');
+
+/**
+ * Generate intelligent summary for a tool call
+ */
+function generateSummary(toolName, args, context) {
+  const summaries = {
+    'Edit': () => {
+      const { file_path } = args;
+      const filename = file_path ? file_path.split(/[\\/]/).pop() : 'unknown file';
+      return `Modified ${filename} - applied code changes to ${file_path}`;
+    },
+    'Write': () => {
+      const { file_path } = args;
+      const filename = file_path ? file_path.split(/[\\/]/).pop() : 'unknown file';
+      return `Created ${filename} - wrote new file at ${file_path}`;
+    },
+    'Bash': () => {
+      const { command, description } = args;
+      if (description) {
+        return `Executed: ${description}`;
+      }
+      if (command) {
+        const shortCmd = command.length > 60 ? command.substring(0, 60) + '...' : command;
+        return `Ran: ${shortCmd}`;
+      }
+      return 'Executed shell command';
+    },
+    'Task': () => {
+      const { description, subagent_type } = args;
+      if (subagent_type && description) {
+        return `Launched ${subagent_type} agent: ${description}`;
+      }
+      return description || 'Started agent task';
+    },
+    'Skill': () => {
+      const { skill, args: skillArgs } = args;
+      if (skill) {
+        return `Invoked skill "${skill}"${skillArgs ? ` with args: ${skillArgs}` : ''}`;
+      }
+      return 'Executed skill';
+    }
+  };
+
+  const generator = summaries[toolName];
+  if (generator) {
+    try {
+      return generator();
+    } catch (e) {
+      // Fallback to default
+    }
+  }
+
+  // Default summary for unknown tools
+  return `Used ${toolName} tool`;
+}
+
+/**
+ * Infer intent from tool call
+ */
+function inferIntent(toolName, args) {
+  const intents = {
+    'Edit': 'code_modification',
+    'Write': 'file_creation',
+    'Bash': 'command_execution',
+    'Task': 'agent_delegation',
+    'Skill': 'skill_execution',
+    'AskUserQuestion': 'user_interaction'
+  };
+
+  return intents[toolName] || 'tool_use';
+}
 
 async function postToolUse(toolName, args, result) {
   console.log(`[ARGUS] Post-tool: ${toolName}`);
@@ -23,8 +100,22 @@ async function postToolUse(toolName, args, result) {
   }
 
   try {
+    // Generate intelligent summary
+    let summary = generateSummary(toolName, args);
+    const intent = inferIntent(toolName, args);
+
+    // Track action in context
+    if (toolName === 'Edit' || toolName === 'Write') {
+      trackFileModification(args.file_path, toolName.toLowerCase());
+    } else if (toolName === 'Bash') {
+      trackCommand(args.command, args.description);
+    }
+
+    // Enhance summary with task context
+    summary = getEnhancedSummary(toolName, args, summary);
+
     // Create a more descriptive prompt from the tool call
-    let promptContent = `${toolName} called`;
+    let promptContent = summary;
 
     // Capture edit/change preview for Edit/Write operations
     let changePreview = null;
@@ -41,7 +132,6 @@ async function postToolUse(toolName, args, result) {
             added: new_string.substring(0, 200) + (new_string.length > 200 ? '...' : '')
           }
         };
-        promptContent = `Edit ${file_path}: ${old_string.substring(0, 50)}... → ${new_string.substring(0, 50)}...`;
       }
     } else if (toolName === 'Write' && args) {
       const { file_path, content } = args;
@@ -52,7 +142,6 @@ async function postToolUse(toolName, args, result) {
           contentLength: content.length,
           preview: content.substring(0, 200) + (content.length > 200 ? '...' : '')
         };
-        promptContent = `Write ${file_path} (${content.length} chars)`;
       }
     }
 
@@ -74,6 +163,8 @@ async function postToolUse(toolName, args, result) {
     queueTransaction({
       prompt: promptContent,
       promptType: 'tool',
+      summary: summary,  // Human-readable summary
+      intent: intent,    // Inferred intent
       context: {
         cwd: process.cwd(),
         platform: process.platform,
@@ -88,8 +179,10 @@ async function postToolUse(toolName, args, result) {
         changePreview: changePreview
       },
       metadata: {
-        tags: [toolName, 'auto_captured'],
-        category: changePreview ? 'file_modification' : 'tool_execution'
+        tags: [toolName, 'auto_captured', intent],
+        category: changePreview ? 'file_modification' : 'tool_execution',
+        summary: summary,  // Also store in metadata for easy access
+        intent: intent
       }
     });
 

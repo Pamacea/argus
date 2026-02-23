@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.9] - 2026-02-23
+
+### ✨ New Features
+
+#### Intelligent Summaries System
+- **Human-Readable Action Descriptions** - Every tool action now gets a clear, contextual summary
+- **Task Context Tracking** - New `context-tracker.js` module maintains task state across session
+- **Enhanced Pre-Prompt Hook** - Captures user intent and infers task type automatically
+- **Smart Intent Detection** - Recognizes 6 task types: feature_development, bug_fixing, refactoring, testing, documentation, setup
+
+#### Summary Examples
+```
+Before: "Edit session-start.js: async function..."
+After:  "Building feature: Modified session-start.js"
+
+Before: "Bash with command='git status'"
+After:  "Working on task: Ran git status"
+
+Before: "Write install-mcp.js (145 lines)"
+After:  "Setting up: Created install-mcp.js"
+```
+
+#### Auto-Configuration
+- **MCP Server Auto-Install** - `install-mcp.js` script automatically configures MCP server on plugin install
+- **SessionStart Integration** - Checks and configures MCP if needed during session start
+- **Zero Manual Setup** - Works out of the box, no `mcp.json` editing required
+
+#### Queue Processing
+- **Standalone Queue Processor** - `process-queue.js` runs independently of MCP server
+- **JSONL Storage** - Simpler, more reliable transaction storage
+- **5-Second Processing** - Transactions processed every 5 seconds automatically
+
+### 🔧 Improvements
+- **Better Hook System** - Pre-prompt, post-tool, and stop hooks all work together
+- **Context-Aware Captures** - Tracks files modified and commands run during session
+- **Enhanced Metadata** - Each transaction now includes: summary, intent, task context
+- **Improved Debug Logging** - Better visibility into hook execution
+
+### 📝 Documentation
+- **Updated CLAUDE.md** - New features and examples documented
+- **CHANGELOG.md** - Complete version history
+- **Usage Examples** - Real-world summary comparisons
+
+---
+
 ## [0.5.8] - 2026-02-23
 
 ### 🔧 Maintenance

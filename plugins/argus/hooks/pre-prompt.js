@@ -5,26 +5,33 @@
  */
 
 const { queuePrompt } = require('./utils');
+const { updateTaskContext, extractTask } = require('./context-tracker');
 
 async function prePrompt(prompt, context) {
   console.log('[ARGUS] Capturing user prompt...');
 
   try {
+    // Extract task and update context
+    const task = extractTask(prompt);
+    updateTaskContext(prompt, task);
+
     // Queue the prompt for storage
     queuePrompt({
       prompt: prompt.substring(0, 10000), // Limit to 10k chars
       context: {
         cwd: process.cwd(),
         platform: process.platform,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        task: task
       },
       metadata: {
         type: 'user_prompt',
-        length: prompt.length
+        length: prompt.length,
+        task: task
       }
     });
 
-    console.log('[ARGUS] ✓ Prompt queued for storage');
+    console.log(`[ARGUS] ✓ Task: ${task} - Prompt queued`);
   } catch (error) {
     console.error('[ARGUS] Warning: Could not queue prompt:', error.message);
   }

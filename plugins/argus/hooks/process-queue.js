@@ -95,7 +95,9 @@ async function processQueue() {
         sessionId: item.context?.cwd || 'unknown',
         prompt: {
           raw: item.prompt,
-          type: item.promptType || 'tool'
+          type: item.promptType || 'tool',
+          summary: item.summary || item.prompt,  // Human-readable summary
+          intent: item.intent || 'tool_use'      // Inferred intent
         },
         context: {
           cwd: item.context?.cwd || process.cwd(),
@@ -108,11 +110,14 @@ async function processQueue() {
           output: item.result?.output,
           error: item.result?.error,
           duration: item.result?.duration || 0,
-          toolsUsed: item.result?.toolsUsed || []
+          toolsUsed: item.result?.toolsUsed || [],
+          changePreview: item.result?.changePreview
         },
         metadata: {
           tags: [...(item.metadata?.tags || []), 'queue_processed'],
           category: item.metadata?.category,
+          summary: item.summary || item.prompt,  // Store summary for display
+          intent: item.intent || 'tool_use',    // Store intent for filtering
           relatedHooks: item.metadata?.relatedHooks || []
         }
       };

@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "type": "module",
   "description": "ARGUS - Sentinelle omnisciente pour Claude Code. Force l'IA à consulter le contexte historique et technique avant toute action.",
   "author": "Alane",

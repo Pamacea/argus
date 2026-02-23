@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.8 | **License:** MIT
+**Version:** 0.5.9 | **License:** MIT
 
 ---
 
@@ -14,7 +14,7 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.8)
+## ✨ Key Features (v0.5.9)
 
 ### 🎨 Complete Dashboard Redesign
 - **New Sidebar Navigation** - Clean left sidebar with icons for all sections
@@ -47,6 +47,25 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 - **Multi-Language** - Supports .js, .ts, .jsx, .tsx, .py, .rs, .go, .java
 - **Smart Filtering** - Ignores node_modules, .git, dist, build
 - **Persistent Index** - Index data saved between sessions
+
+### 🧠 Intelligent Summaries (NEW in v0.5.9)
+- **Human-Readable Descriptions** - Every action gets a clear, contextual summary
+- **Task Context Tracking** - Knows WHAT you're working on (feature, bugfix, refactor, etc.)
+- **Enhanced Recent Activity** - Shows "Building feature: Modified file.js" instead of "Edit file.js..."
+- **Intent Detection** - Automatically infers purpose from user prompts
+- **Full Context Memory** - Remembers user intent across multiple actions
+
+**Example Comparisons:**
+```
+Before: Edit session-start.js: async function...
+After:  Building feature: Modified session-start.js
+
+Before: Bash with command="git status"
+After:  Working on task: Ran git status
+
+Before: Write install-mcp.js (145 lines)
+After:  Setting up: Created install-mcp.js
+```
 
 ### 🪝 Smart Hooks
 - **PreToolUse** - Intercepts Explore and CreateTeam before execution
@@ -391,13 +410,16 @@ docker run -p 6333:6333 qdrant/qdrant
 
 See **CHANGELOG.md** for detailed version history.
 
-### Current Version: 0.5.8
+### Current Version: 0.5.9
 
 **Recent Updates:**
-- Cache cleanup and system reset
-- Documentation refresh
-- Verified all hooks and MCP tools operational
-- Read/write operations tested and confirmed working
+- Intelligent summary generation for all tool actions
+- Task context tracking across session
+- Enhanced Recent Activity with human-readable descriptions
+- Intent detection from user prompts
+- Pre-prompt hook captures user goals
+- Auto-configuration of MCP server on install
+- Standalone queue processor for transactions
 
 ---
 
@@ -415,4 +437,4 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**ARGUS v0.5.8** - Your omniscient sentinel for Claude Code.
+**ARGUS v0.5.9** - Your omniscient sentinel for Claude Code.
