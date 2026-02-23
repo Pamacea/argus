@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.7] - 2026-02-23
+
+### 🐛 Bug Fixes
+
+#### Critical Hook Fixes
+- **Fixed stdin parsing** - Hooks now correctly read tool data from stdin JSON instead of missing env vars
+- **Tool name capture** - Transactions now show actual tool names (Edit, Bash, etc.) instead of "unknown"
+- **Variable scope fix** - Fixed "const changeSummary" assignment error in post-edit hook
+
+#### Hook Updates
+- **post-tool-use.js** - Now reads `{ toolName, args, result }` from stdin
+- **pre-tool-use.js** - Now reads `{ toolName, args }` from stdin
+- **post-edit.js** - Updated for stdin JSON parsing with fallback to env vars
+- **post-response.js** - Updated for stdin JSON parsing
+- **pre-prompt.js** - Updated for stdin JSON parsing
+
+### 🔧 Technical Details
+
+All hooks now support the Claude Code hooks specification:
+- Primary data source: stdin JSON (e.g., `{"toolName":"Edit","args":{...},"result":{...}}`)
+- Fallback: ARGUS_TOOL_* environment variables for backward compatibility
+- Better error handling with try-catch for JSON parsing
+
+---
+
 ## [0.5.6] - 2026-02-23
 
 ### 🎨 UI/UX Improvements

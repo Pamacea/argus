@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.6 | **License:** MIT
+**Version:** 0.5.7 | **License:** MIT
 
 ---
 
@@ -14,7 +14,7 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.6)
+## ✨ Key Features (v0.5.7)
 
 ### 🎨 Complete Dashboard Redesign
 - **New Sidebar Navigation** - Clean left sidebar with icons for all sections

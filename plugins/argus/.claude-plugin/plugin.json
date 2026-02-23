@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Sentinelle omnisciente - Force l'IA à consulter le contexte historique et technique avant toute action",
   "author": {
     "name": "Oalacea"
@@ -38,6 +38,10 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/debug-hook.js"
+          },
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-edit.js"
