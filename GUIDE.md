@@ -1,21 +1,22 @@
 # ARGUS - Comprehensive User Guide
 
-**Version:** 0.5.2 | **Last Updated:** 2025-02-23
+**Version:** 0.5.3 | **Last Updated:** 2026-02-23
 
 ---
 
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Installation](#2-installation)
-3. [Getting Started](#3-getting-started)
-4. [Core Concepts](#4-core-concepts)
-5. [MCP Tools Reference](#5-mcp-tools-reference)
-6. [Web Dashboard Guide](#6-web-dashboard-guide)
-7. [Advanced Usage](#7-advanced-usage)
-8. [Troubleshooting](#8-troubleshooting)
-9. [Best Practices](#9-best-practices)
-10. [Architecture Deep Dive](#10-architecture-deep-dive)
+2. [What's New in v0.5.3](#2-whats-new-in-053)
+3. [Installation](#3-installation)
+4. [Getting Started](#4-getting-started)
+5. [Core Concepts](#5-core-concepts)
+6. [MCP Tools Reference](#6-mcp-tools-reference)
+7. [Web Dashboard Guide](#7-web-dashboard-guide)
+8. [Advanced Usage](#8-advanced-usage)
+9. [Troubleshooting](#9-troubleshooting)
+10. [Best Practices](#10-best-practices)
+11. [Architecture Deep Dive](#11-architecture-deep-dive)
 
 ---
 
@@ -37,7 +38,7 @@ ARGUS (Automatic Retrieval-Guided Understanding System) is a context-aware memor
 **The Solution:**
 - ARGUS intercepts exploratory actions before execution
 - Forces consultation of historical context and documentation
-- Provides semantic search across all past transactions
+- Provides semantic search across all past transactions (local or vector)
 - Maintains a complete audit trail of all actions
 - Indexes your codebase for intelligent retrieval
 
@@ -48,16 +49,66 @@ ARGUS (Automatic Retrieval-Guided Understanding System) is a context-aware memor
 3. **Awareness** - Claude knows about past decisions and constraints
 4. **Traceability** - Complete audit trail of all actions
 5. **Intelligence** - Semantic search finds relevant past work
+6. **Zero Dependencies** - Works without Docker or external databases
 
 ---
 
-## 2. Installation
+## 2. What's New in v0.5.3
+
+### 🚀 Local Semantic Search
+
+ARGUS now includes a built-in TF-IDF search engine that works without any external dependencies:
+
+**Features:**
+- Text tokenization with stemming
+- Term frequency-inverse document frequency scoring
+- Cosine similarity matching
+- Document highlighting for relevant snippets
+
+**Benefits:**
+- No Docker required
+- Faster than vector search for simple queries
+- Works offline
+- Automatic fallback from Qdrant
+
+### 🔧 Auto-Index Fix
+
+The auto-indexing feature now works correctly:
+
+**What Changed:**
+- Actually scans project directories (before it only tracked)
+- Indexes multiple file types (.js, .ts, .jsx, .tsx, .py, .rs, .go, .java)
+- Smart filtering (ignores node_modules, .git, dist, build)
+- Creates index files in `~/.argus/` with project metadata
+
+**Result:**
+- Projects are automatically indexed when you start a session
+- Index information persists between sessions
+- Dashboard shows real file counts
+
+### 📊 Dashboard Enhancements
+
+New features in the web dashboard:
+
+**Indexed Projects Section:**
+- List of all indexed projects
+- File counts per project
+- Last indexed timestamps
+- Full vs incremental indexing status
+
+**New API Endpoint:**
+- `GET /api/indexed` - Returns indexed projects data
+
+---
+
+## 3. Installation
 
 ### Prerequisites
 
 - Node.js >= 18.0.0
 - Claude Code CLI
 - Git (for cloning the repository)
+- Docker Desktop (optional, for Qdrant vector search)
 
 ### Install ARGUS
 
@@ -80,16 +131,12 @@ npm run build
 ls plugins/argus/mcp/dist/
 
 # You should see:
-# - index.js
-# - handlers.js
-# - storage.js
-# - rag.js
-# - indexer.js
+# - index.js (bundled server)
 ```
 
 ---
 
-## 3. Getting Started
+## 4. Getting Started
 
 ### Automatic Startup
 

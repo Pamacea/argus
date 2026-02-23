@@ -1,6 +1,6 @@
 {
   "name": "argus-mcp-server",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "ARGUS MCP Server - Memory and RAG for Claude Code",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "@qdrant/js-client-rest": "^1.12.0",
     "sql.js": "^1.12.0",
     "uuid": "^11.0.3",
-    "chrono-node": "^2.7.1"
+    "chrono-node": "^2.7.1",
+    "node-nlp": "^4.27.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

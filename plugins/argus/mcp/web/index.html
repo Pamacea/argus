@@ -479,7 +479,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <p><strong>ARGUS</strong> v<span id="version">0.5.2</span> - Sentinelle Omnisciente pour Claude Code</p>
+      <p><strong>ARGUS</strong> v<span id="version">0.5.3</span> - Sentinelle Omnisciente pour Claude Code</p>
       <p style="margin-top: 0.5rem;">
         <a href="https://github.com/Pamacea/argus" target="_blank">GitHub</a> ·
         <a href="/api/docs">API Documentation</a>
@@ -628,24 +628,32 @@
       `;
     }
 
-    // Render projects list
-    function renderProjects() {
-      // Sample data - in real implementation, this would come from API
-      const projects = [
-        {
-          name: 'ARGUS Plugin',
-          path: 'C:/Users/Yanis/Projects/-plugins/argus',
-          status: 'indexed',
-          fileCount: 42
-        }
-      ];
+    // Fetch indexed projects from API
+    async function fetchIndexedProjects() {
+      try {
+        const response = await fetch(`${API_BASE}/api/indexed`);
+        if (!response.ok) throw new Error('Failed to fetch indexed projects');
+        const data = await response.json();
 
-      if (projects.length === 0) {
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load projects');
+        }
+
+        return data.projects || [];
+      } catch (error) {
+        console.error('Error fetching indexed projects:', error);
+        return [];
+      }
+    }
+
+    // Render projects list
+    function renderProjects(projects) {
+      if (!projects || projects.length === 0) {
         return `
           <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
             <p>No projects indexed yet.</p>
             <p style="margin-top: 0.5rem; font-size: 0.9rem;">
-              Use the MCP tool <code>argus__index_codebase</code> to index your projects.
+              Projects will be automatically indexed when you start a session.
             </p>
           </div>
         `;
@@ -653,17 +661,27 @@
 
       return `
         <ul class="project-list">
-          ${projects.map(project => `
-            <li class="project-item">
-              <div>
-                <div class="project-name">${project.name}</div>
-                <div class="project-path">${project.path}</div>
+          ${projects.map(project => {
+            const lastIndexed = new Date(project.lastIndexed);
+            const timeAgo = formatDuration((Date.now() - lastIndexed.getTime()) / 1000);
+            const fileCount = project.fileCount || 0;
+            const indexed = project.indexed || 'full';
+
+            return `
+            <li class="project-item" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+              <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div class="project-name">${project.name}</div>
+                  <div class="project-path">${project.project}</div>
+                </div>
+                <span class="project-status indexed">✓ ${indexed === 'full' ? 'Fully' : 'Partially'} Indexed</span>
               </div>
-              <span class="project-status ${project.status}">
-                ${project.status === 'indexed' ? '✓ Indexed' : '⏳ Pending'}
-              </span>
+              <div style="width: 100%; display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+                <span>📄 ${fileCount} files</span>
+                <span>🕒 ${timeAgo} ago</span>
+              </div>
             </li>
-          `).join('')}
+          `}).join('')}
         </ul>
       `;
     }
@@ -754,7 +772,7 @@
     // Load all data
     async function loadData() {
       try {
-        const [stats, status] = await Promise.all([
+        const [stats, status, projects] = await Promise.all([
           fetchStats().catch(err => {
             console.error('Stats fetch failed:', err);
             return null;
@@ -762,6 +780,10 @@
           fetchServerStatus().catch(err => {
             console.error('Status fetch failed:', err);
             return null;
+          }),
+          fetchIndexedProjects().catch(err => {
+            console.error('Projects fetch failed:', err);
+            return [];
           })
         ]);
 
@@ -769,7 +791,7 @@
         document.getElementById('indexStats').innerHTML = renderIndexStats(stats);
         document.getElementById('memoryStats').innerHTML = renderMemoryStats(stats);
         document.getElementById('mcpTools').innerHTML = renderMCPTools();
-        document.getElementById('projectsList').innerHTML = renderProjects();
+        document.getElementById('projectsList').innerHTML = renderProjects(projects);
         document.getElementById('activityList').innerHTML = renderActivity();
         document.getElementById('serverInfo').innerHTML = renderServerInfo(status);
 

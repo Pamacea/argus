@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.2 | **License:** MIT
+**Version:** 0.5.3 | **License:** MIT
 
 ---
 
@@ -14,14 +14,35 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features (v0.5.3)
 
-- **RAG Memory Engine** - Semantic search across all project transactions using Qdrant vector database
-- **Code Indexing** - Automatic scanning and indexing of `/src` and `/docs` directories
-- **Smart Hooks** - Intercepts Explore and CreateTeam before execution
-- **Transaction History** - Complete audit trail of all Claude actions with context
-- **Web Dashboard** - Real-time monitoring at `http://localhost:30000`
-- **MCP Integration** - Full Model Context Protocol server implementation
+### 🔍 Dual-Mode Semantic Search
+- **Local Search (TF-IDF)** - Works without Docker, zero external dependencies
+- **Vector Search (Qdrant)** - Advanced semantic search when Docker is available
+- **Automatic Fallback** - Seamlessly switches between modes
+
+### 📁 Smart Auto-Indexing
+- **Real File Scanning** - Actually walks directories and indexes files
+- **Multi-Language** - Supports .js, .ts, .jsx, .tsx, .py, .rs, .go, .java
+- **Smart Filtering** - Ignores node_modules, .git, dist, build
+- **Persistent Index** - Index data saved between sessions
+
+### 🪝 Smart Hooks
+- **PreToolUse** - Intercepts Explore and CreateTeam before execution
+- **PostToolUse** - Captures Edit/Write operations with detailed tracking
+- **SessionStart** - Initializes ARGUS and auto-indexes current project
+- **Stop** - Persists state on session shutdown
+
+### 📊 Web Dashboard
+- **Real-time Monitoring** at `http://localhost:30000`
+- **Indexed Projects** - View all indexed projects with file counts
+- **Transaction History** - Complete audit trail
+- **API Endpoints** - RESTful API for all data
+
+### 🔧 MCP Integration
+- **6 MCP Tools** - Complete toolkit for memory and search
+- **Queue System** - Reliable edit/prompt tracking
+- **Transaction Storage** - SQLite database with optional Qdrant
 
 ---
 
@@ -42,13 +63,49 @@ npm run build
 
 ---
 
+## 🆕 What's New in v0.5.3
+
+### Local Semantic Search
+ARGUS now includes a built-in TF-IDF search engine:
+
+**Benefits:**
+- ✅ Works without Docker or Qdrant
+- ✅ Faster than vector search for simple queries
+- ✅ Zero external dependencies
+- ✅ Automatic fallback from Qdrant
+
+### Auto-Index Fix
+The auto-indexing feature now works correctly:
+
+**What Changed:**
+- Actually scans project directories (not just tracking)
+- Indexes multiple file types (.js, .ts, .jsx, .tsx, .py, .rs, .go, .java)
+- Smart filtering (ignores node_modules, .git, dist, build)
+- Creates index files in `~/.argus/` with metadata
+
+### Dashboard Enhancements
+New features in the web dashboard:
+
+**Indexed Projects Section:**
+- List of all indexed projects
+- File counts per project
+- Last indexed timestamps
+- Full vs incremental indexing status
+
+**New API Endpoint:**
+- `GET /api/indexed` - Returns indexed projects data
+
+---
+
 ## 🔧 How It Works
 
 ### 1. Automatic Initialization
 When Claude Code starts, ARGUS initializes:
 - Starts the MCP server
-- Loads the RAG index
+- Loads local semantic search index
 - Prepares the transaction storage
+- Auto-indexes current project (if needed)
+- Starts web dashboard
 
 ### 2. Pre-Action Interception
 Before any `Explore` or `CreateTeam` action:
@@ -58,8 +115,8 @@ Before any `Explore` or `CreateTeam` action:
 
 ### 3. Context Retrieval
 The `argus__check_hooks` tool retrieves:
-- Similar past transactions (semantic search)
-- Relevant code from `/src` and `/docs`
+- Similar past transactions (local TF-IDF or Qdrant vector search)
+- Relevant code from indexed projects
 - Project patterns and conventions
 - Any relevant constraints or decisions
 
@@ -73,8 +130,8 @@ Claude then executes the original action with full context:
 ### 5. Transaction Saving
 After action completion:
 - `argus__save_transaction` stores the result
-- Result is indexed for RAG
-- Files are updated in the index
+- Result is indexed for local and/or vector search
+- Files are queued for processing
 - History is preserved for future reference
 
 ---

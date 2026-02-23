@@ -139,7 +139,7 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       name: 'ARGUS Web Dashboard',
-      version: '0.5.2',
+      version: '0.5.3',
       description: 'Sentinelle omnisciente pour Claude Code',
       server: {
         host: HOST,
@@ -188,7 +188,7 @@ async function handleRequest(req, res) {
           description: 'Get server status and information',
           response: {
             name: 'ARGUS Web Dashboard',
-            version: '0.5.2',
+            version: '0.5.3',
             server: {
               host: 'localhost',
               port: 30000,
@@ -213,6 +213,24 @@ async function handleRequest(req, res) {
               memorySize: 'bytes',
               lastIndexTime: 'ISO 8601 timestamp'
             }
+          }
+        },
+        {
+          method: 'GET',
+          path: '/api/indexed',
+          description: 'Get list of indexed projects with file counts and timestamps',
+          response: {
+            success: true,
+            count: 'number of indexed projects',
+            projects: [
+              {
+                name: 'project name',
+                project: 'full project path',
+                fileCount: 'number of indexed files',
+                lastIndexed: 'ISO 8601 timestamp',
+                indexed: 'full or incremental'
+              }
+            ]
           }
         },
         {
@@ -256,6 +274,67 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Indexed files endpoint - get information about indexed projects
+  if (url.pathname === '/api/indexed' && req.method === 'GET') {
+    try {
+      import('fs').then(({ readdirSync, existsSync, readFileSync }) => {
+        const indexedProjects = [];
+
+        try {
+          // Read all index info files from data directory
+          const files = readdirSync(DATA_DIR);
+
+          for (const file of files) {
+            if (file.startsWith('index-') && file.endsWith('.json')) {
+              try {
+                const indexPath = join(DATA_DIR, file);
+                const indexData = JSON.parse(readFileSync(indexPath, 'utf-8'));
+
+                // Decode the base64 project path
+                const projectPath = Buffer.from(file.replace('index-', '').replace('.json', ''), 'base64').toString('utf-8');
+
+                indexedProjects.push({
+                  project: projectPath,
+                  name: projectPath.split(/[/\\]/).pop() || projectPath,
+                  ...indexData,
+                  lastIndexed: new Date(indexData.lastIndexTime || indexData.timestamp).toISOString(),
+                  fileCount: indexData.fileCount || 0
+                });
+              } catch (e) {
+                // Skip corrupted index files
+              }
+            }
+          }
+        } catch (e) {
+          // Data directory might not exist
+        }
+
+        // Sort by last indexed time (newest first)
+        indexedProjects.sort((a, b) => new Date(b.lastIndexed) - new Date(a.lastIndexed));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          count: indexedProjects.length,
+          projects: indexedProjects
+        }, null, 2));
+      }).catch(error => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: error.message
+        }, null, 2));
+      });
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: error.message
+      }, null, 2));
+    }
+    return;
+  }
+
   // Root endpoint - serve HTML dashboard
   if (url.pathname === '/' && req.method === 'GET') {
     const indexPath = join(__dirname, 'index.html');
@@ -273,6 +352,7 @@ async function handleRequest(req, res) {
           health: '/health',
           status: '/api/status',
           stats: '/api/stats',
+          indexed: '/api/indexed',
           docs: '/api/docs'
         }
       }, null, 2));
@@ -285,7 +365,7 @@ async function handleRequest(req, res) {
   res.end(JSON.stringify({
     error: 'Not Found',
     path: url.pathname,
-    available: ['/', '/health', '/api/status', '/api/stats', '/api/docs']
+    available: ['/', '/health', '/api/status', '/api/stats', '/api/indexed', '/api/docs']
   }, null, 2));
 }
 

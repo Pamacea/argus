@@ -4,12 +4,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // Session state file path
 const SESSION_STATE_PATH = path.join(process.env.CLAUDE_PLUGIN_ROOT, '.session-state.json');
 
-// Queue file paths for persistence
-const QUEUE_DIR = path.join(process.env.ARGUS_DATA_DIR || path.join(require('os').homedir(), '.argus'), 'queue');
+// Use absolute path for data directory
+const ARGUS_HOME = path.join(os.homedir(), '.argus');
+const QUEUE_DIR = path.join(ARGUS_HOME, 'queue');
 const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.json');
 const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.json');
 const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.json');

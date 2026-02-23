@@ -450,29 +450,60 @@ async function autoIndexProject(projectDir, pluginRoot) {
   // Use incremental index if previously indexed, full index if new
   const useIncremental = lastIndexed > 0;
 
-  // Call the MCP tool to index the codebase
-  // We need to invoke it via the MCP server since it's an MCP tool
-  // For now, we'll just log that indexing would happen
-  console.log(`[ARGUS] ℹ Indexing mode: ${useIncremental ? 'incremental' : 'full'}`);
-  console.log(`[ARGUS] ℹ To manually index, use: argus__index_codebase`);
-
-  // Note: Actually calling the MCP tool from a hook is complex
-  // The indexing should be triggered by the user or via the MCP interface
-  // This hook just sets up the infrastructure and informs the user
-
+  // Actually perform the indexing by walking the directory
   try {
-    // Could add automatic indexing here via direct file system operations
-    // or by calling the indexer directly
+    const indexedFiles = [];
+    const srcDirs = ['src', 'lib', 'app', 'components', 'hooks', 'utils', 'services'];
+
+    // Walk through common source directories
+    for (const srcDir of srcDirs) {
+      const srcPath = path.join(projectDir, srcDir);
+      if (!fs.existsSync(srcPath)) continue;
+
+      const walkDir = (dir) => {
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+
+            if (stat.isDirectory()) {
+              // Skip node_modules and similar
+              if (!['node_modules', '.git', 'dist', 'build', '.next'].includes(file)) {
+                walkDir(fullPath);
+              }
+            } else if (stat.isFile() && /\.(js|ts|jsx|tsx|py|rs|go|java)$/.test(file)) {
+              // Store file info for indexing
+              indexedFiles.push({
+                path: fullPath,
+                relative: path.relative(projectDir, fullPath),
+                size: stat.size,
+                modified: stat.mtime.getTime()
+              });
+            }
+          }
+        } catch (error) {
+          // Skip directories we can't read
+        }
+      };
+
+      walkDir(srcPath);
+    }
+
+    // Save index info
     const stats = {
       projectDir,
       indexed: useIncremental ? 'incremental' : 'full',
+      fileCount: indexedFiles.length,
+      files: indexedFiles.slice(0, 100), // Keep first 100 files
       timestamp: now
     };
 
     updateIndexInfo(projectDir, stats);
-    console.log('[ARGUS] ✓ Index info updated');
+    console.log(`[ARGUS] ✓ Indexed ${indexedFiles.length} files in ${path.basename(projectDir)}`);
+    console.log(`[ARGUS] ℹ To manually re-index, use: argus__index_codebase`);
   } catch (error) {
-    console.warn('[ARGUS] ⚠ Auto-index note:', error.message);
+    console.warn('[ARGUS] ⚠ Auto-index error:', error.message);
   }
 }
 

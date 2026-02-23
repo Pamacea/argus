@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Sentinelle omnisciente - Force l'IA à consulter le contexte historique et technique avant toute action",
   "author": {
     "name": "Oalacea"

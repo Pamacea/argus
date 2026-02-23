@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.3] - 2026-02-23
+
+### 🚀 Major Features
+
+#### Local Semantic Search (TF-IDF)
+- **Zero Dependencies**: Works without Docker or Qdrant
+- **TF-IDF Engine**: Term frequency-inverse document frequency scoring
+- **Tokenization**: Smart text tokenization with stemming
+- **Cosine Similarity**: Relevance scoring for search results
+- **Document Highlighting**: Extracts relevant snippets from results
+
+#### Auto-Index Fixed
+- **Real File Scanning**: Actually walks project directories
+- **Multi-Language Support**: Indexes .js, .ts, .jsx, .tsx, .py, .rs, .go, .java files
+- **Smart Filtering**: Ignores node_modules, .git, dist, build directories
+- **Persistent Index**: Saves index metadata to `~/.argus/index-*.json`
+- **Incremental Support**: Tracks last index time per project
+
+#### Dashboard Enhancements
+- **Indexed Projects Section**: Shows all indexed projects with file counts
+- **New API Endpoint**: `GET /api/indexed` for indexed projects data
+- **Timestamp Display**: Shows last indexed time per project
+- **File Counters**: Displays number of indexed files per project
+- **Status Indicators**: Full vs incremental indexing status
+
+### 🔧 Improvements
+
+#### Queue System
+- **Absolute Paths**: Uses `os.homedir()` instead of env vars
+- **Reliable Creation**: Queue files persist correctly now
+- **Edit Tracking**: Captures Edit/Write operations
+- **Prompt Tracking**: Records all prompts for analysis
+
+#### RAG Engine
+- **Dual Mode**: Supports both Qdrant and local search
+- **Automatic Fallback**: Switches to local search if Qdrant unavailable
+- **Seamless Integration**: Same API regardless of backend
+- **Load on Startup**: Populates local index from existing transactions
+
+### 📝 Documentation
+
+- Updated README.md with v0.5.3 features
+- Updated GUIDE.md with comprehensive v0.5.3 documentation
+- Updated CLAUDE.md with new capabilities
+- Updated CHANGELOG.md with detailed release notes
+
+### 🔍 Technical Details
+
+**New Files:**
+- `src/semantic/local-semantic.ts` - TF-IDF search engine implementation
+
+**Modified Files:**
+- `src/rag/engine.ts` - Dual-mode support (Qdrant + local)
+- `hooks/session-start.js` - Real file indexing implementation
+- `hooks/utils.js` - Fixed queue paths with os.homedir()
+- `web/server.js` - New `/api/indexed` endpoint
+- `web/index.html` - Indexed projects display
+
+**Dependencies:**
+- Added `node-nlp@^4.27.0` for TF-IDF functionality
+
+### 🎯 User Experience
+
+**Before v0.5.3:**
+- ❌ Auto-index didn't actually scan files
+- ❌ Required Docker/Qdrant for semantic search
+- ❌ Queue files weren't created reliably
+- ❌ No visibility into indexed projects
+
+**After v0.5.3:**
+- ✅ Auto-index scans and tracks actual files
+- ✅ Semantic search works without Docker
+- ✅ Queue system creates files reliably
+- ✅ Dashboard shows all indexed projects
+- ✅ Automatic fallback to local search
+
+---
+
+## [0.5.2] - 2025-02-23
+
+### Fixed
+- **Web Dashboard:** Fixed infinite loading issues when stats endpoint fails
+- **Port Detection:** Improved port detection to handle TIME_WAIT connections
+- **Server.js:** Fixed cwd (current working directory) for proper index.html serving
+- **Error Handling:** Enhanced error handling in dashboard for robust operation
+
+### Technical Details
+- Dashboard now gracefully handles API failures without infinite loading
+- Port detection now checks for TIME_WAIT state to avoid false conflicts
+- Server.js now properly resolves absolute path for index.html
+- Added better error messages and fallback UI states
+
+---
+
 ## [0.5.2] - 2025-02-23
 
 ### Fixed
@@ -72,6 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.5.3]: https://github.com/Pamacea/argus/releases/tag/v0.5.3
 [0.5.2]: https://github.com/Pamacea/argus/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Pamacea/argus/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Pamacea/argus/releases/tag/v0.5.0

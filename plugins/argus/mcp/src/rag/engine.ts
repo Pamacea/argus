@@ -1,18 +1,21 @@
 /**
  * RAG Engine for ARGUS
  * Provides semantic search using vector embeddings and Qdrant
+ * Falls back to local semantic search if Qdrant is unavailable
  */
 
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { v4 as uuidv4 } from 'uuid';
 import { Transaction, Hook, SearchQuery, RAGResult } from '../types/index.js';
 import { getStorage } from '../storage/database.js';
+import LocalSemanticSearch from '../semantic/local-semantic.js';
 
 export interface RAGConfig {
   qdrantUrl?: string;
   qdrantApiKey?: string;
   embeddingDimension?: number;
   collectionName?: string;
+  useLocal?: boolean; // Force local semantic search
 }
 
 export interface EmbeddingOptions {
@@ -96,13 +99,15 @@ export class RAGEngine {
   private config: Required<RAGConfig>;
   private embeddingOptions: EmbeddingOptions;
   private useLocalSearch: boolean = false;
+  private localSearch: LocalSemanticSearch = new LocalSemanticSearch();
 
   constructor(config: RAGConfig = {}, embeddingOptions: EmbeddingOptions = { provider: 'local' }) {
     this.config = {
       qdrantUrl: config.qdrantUrl || 'http://localhost:6333',
       qdrantApiKey: config.qdrantApiKey || '',
       embeddingDimension: config.embeddingDimension || 384,
-      collectionName: config.collectionName || 'argus_memory'
+      collectionName: config.collectionName || 'argus_memory',
+      useLocal: config.useLocal || false
     };
     this.embeddingOptions = embeddingOptions;
 
@@ -110,6 +115,14 @@ export class RAGEngine {
   }
 
   private async initializeQdrant(): Promise<void> {
+    // Force local search if configured
+    if (this.config.useLocal) {
+      console.log('[ARGUS] Using local semantic search (Qdrant disabled)');
+      this.useLocalSearch = true;
+      this.loadLocalIndex();
+      return;
+    }
+
     try {
       this.qdrant = new QdrantClient({
         url: this.config.qdrantUrl,
@@ -134,9 +147,36 @@ export class RAGEngine {
         console.log(`Created Qdrant collection: ${this.config.collectionName}`);
       }
     } catch (error) {
-      console.warn('Qdrant not available, falling back to local search:', error);
+      console.warn('[ARGUS] Qdrant not available, falling back to local search:', error);
       this.qdrant = null;
       this.useLocalSearch = true;
+      this.loadLocalIndex();
+    }
+  }
+
+  /**
+   * Load local search index from storage
+   */
+  private loadLocalIndex(): void {
+    try {
+      const transactions = this.storage.getAllTransactions();
+      for (const tx of transactions) {
+        const text = `${tx.prompt.raw}\n${tx.result.output || ''}`;
+        this.localSearch.index({
+          id: tx.id,
+          content: text,
+          metadata: {
+            timestamp: tx.timestamp,
+            sessionId: tx.sessionId,
+            category: tx.metadata.category,
+            tags: tx.metadata.tags
+          },
+          timestamp: tx.timestamp
+        });
+      }
+      console.log(`[ARGUS] Local search index loaded with ${transactions.length} documents`);
+    } catch (error) {
+      console.warn('[ARGUS] Failed to load local index:', error);
     }
   }
 
@@ -151,6 +191,19 @@ export class RAGEngine {
 
       // Store in SQLite with embedding
       this.storage.storeTransaction(tx, embedding);
+
+      // Index in local search
+      this.localSearch.index({
+        id: tx.id,
+        content: text,
+        metadata: {
+          timestamp: tx.timestamp,
+          sessionId: tx.sessionId,
+          category: tx.metadata.category,
+          tags: tx.metadata.tags
+        },
+        timestamp: tx.timestamp
+      });
 
       // If Qdrant is available, index there too
       if (this.qdrant && !this.useLocalSearch) {
@@ -190,6 +243,19 @@ export class RAGEngine {
 
       // Store in SQLite with embedding
       this.storage.storeHook(hook, embedding);
+
+      // Index in local search
+      this.localSearch.index({
+        id: `hook_${hook.id}`,
+        content: text,
+        metadata: {
+          type: 'hook',
+          hookId: hook.id,
+          name: hook.name,
+          triggers: hook.triggers
+        },
+        timestamp: Date.now()
+      });
 
       // If Qdrant is available, index there too
       if (this.qdrant && !this.useLocalSearch) {
