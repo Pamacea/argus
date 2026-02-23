@@ -1,13 +1,14 @@
 {
   "name": "argus-mcp-server",
-  "version": "0.5.5",
+  "version": "0.5.11",
   "description": "ARGUS MCP Server - Memory and RAG for Claude Code",
   "type": "module",
   "scripts": {
     "build": "node build.js",
     "watch": "node build.js --watch",
     "dev": "node --watch server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

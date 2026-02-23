@@ -1,8 +1,8 @@
 {
   "name": "argus-plugin",
-  "version": "0.5.5",
+  "version": "0.5.11",
   "description": "ARGUS - Sentinelle omnisciente pour Claude Code",
-  "author": "Alane",
+  "author": "Oalacea",
   "repository": "https://github.com/Pamacea/argus",
   "license": "MIT",
   "keywords": ["claude-code", "mcp", "rag", "memory", "hooks"],

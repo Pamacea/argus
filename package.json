@@ -1,13 +1,13 @@
 {
   "name": "argus",
-  "version": "0.5.9",
+  "version": "0.5.11",
   "type": "module",
   "description": "ARGUS - Sentinelle omnisciente pour Claude Code. Force l'IA à consulter le contexte historique et technique avant toute action.",
   "author": "Alane",
   "license": "MIT",
   "keywords": ["claude-code", "mcp", "rag", "memory", "hooks", "context-aware"],
   "scripts": {
-    "postinstall": "cd plugins/argus && npm install",
+    "postinstall": "cd plugins/argus && npm install && npm run build:mcp",
     "build": "cd plugins/argus && npm run build:mcp",
     "dev": "cd plugins/argus && npm run dev",
     "test": "cd plugins/argus && npm test",

@@ -18,6 +18,8 @@ export class Storage {
   private dbPath: string;
   private SQL: SqlJsStatic | null = null;
   private initPromise: Promise<void>;
+  private autoFlushInterval: NodeJS.Timeout | null = null;
+  private pendingChanges = false;
 
   constructor(dbPath?: string) {
     const dataDir = dbPath || path.join(process.env.HOME || process.env.USERPROFILE || '.', '.argus');
@@ -25,6 +27,8 @@ export class Storage {
 
     this.dbPath = path.join(dataDir, 'argus.db');
     this.initPromise = this.initialize();
+    this.setupAutoFlush();
+    this.setupShutdownHooks();
   }
 
   private async initialize(): Promise<void> {
@@ -41,9 +45,23 @@ export class Storage {
 
     // Load existing database or create new one
     if (fs.existsSync(this.dbPath)) {
-      const buffer = fs.readFileSync(this.dbPath);
-      this.db = new this.SQL.Database(buffer);
+      try {
+        const buffer = fs.readFileSync(this.dbPath);
+        this.db = new this.SQL.Database(buffer);
+
+        // Verify database is valid by checking transaction count
+        const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM transactions`);
+        if (stmt.step()) {
+          const count = stmt.getAsObject({ count: 0 }).count as number;
+          console.log(`[ARGUS] Loaded existing database with ${count} transactions`);
+        }
+        stmt.free();
+      } catch (error) {
+        console.error('[ARGUS] Failed to load existing database, creating new one:', error);
+        this.db = new this.SQL.Database();
+      }
     } else {
+      console.log('[ARGUS] Creating new database');
       this.db = new this.SQL.Database();
     }
 
@@ -56,9 +74,22 @@ export class Storage {
 
   private saveToFile(): void {
     if (!this.db) return;
-    const data = this.db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(this.dbPath, buffer);
+    try {
+      const data = this.db.export();
+      const buffer = Buffer.from(data);
+
+      // Write to temporary file first (atomic write)
+      const tmpPath = this.dbPath + '.tmp';
+      fs.writeFileSync(tmpPath, buffer);
+
+      // Rename to actual path (atomic operation on most filesystems)
+      fs.renameSync(tmpPath, this.dbPath);
+
+      console.debug(`[ARGUS] Database saved to ${this.dbPath} (${buffer.length} bytes)`);
+    } catch (error) {
+      console.error('[ARGUS] Failed to save database:', error);
+      throw error;
+    }
   }
 
   private initializeSchema(): void {
@@ -180,6 +211,8 @@ export class Storage {
         embedding ? Buffer.from(embedding.buffer) : null
       ]);
 
+      // Mark as pending and save immediately
+      this.pendingChanges = true;
       this.saveToFile();
       return true;
     } catch (error) {
@@ -317,6 +350,7 @@ export class Storage {
       if (!this.db) throw new Error('Database not initialized');
 
       this.db.run(`DELETE FROM transactions WHERE id = ?`, [id]);
+      this.pendingChanges = true;
       this.saveToFile();
       return true;
     } catch (error) {
@@ -363,6 +397,7 @@ export class Storage {
         embedding ? Buffer.from(embedding.buffer) : null
       ]);
 
+      this.pendingChanges = true;
       this.saveToFile();
       return true;
     } catch (error) {
@@ -474,6 +509,7 @@ export class Storage {
       VALUES (?, ?, ?, ?, ?)
     `, [filePath, hash, Date.now(), size, chunksCount]);
 
+    this.pendingChanges = true;
     this.saveToFile();
   }
 
@@ -595,10 +631,45 @@ export class Storage {
   }
 
   /**
-   * Close database connection
+   * Setup automatic flush every 10 seconds if there are pending changes
+   */
+  private setupAutoFlush(): void {
+    // Flush every 10 seconds if there are pending changes
+    this.autoFlushInterval = setInterval(() => {
+      if (this.pendingChanges && this.db) {
+        console.debug('[ARGUS] Auto-flushing database...');
+        this.saveToFile();
+        this.pendingChanges = false;
+      }
+    }, 10000);
+  }
+
+  /**
+   * Setup shutdown hooks to ensure data is saved on exit
+   */
+  private setupShutdownHooks(): void {
+    const shutdown = () => {
+      console.log('[ARGUS] Shutdown signal received, flushing database...');
+      this.close();
+      process.exit(0);
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+    process.on('beforeExit', shutdown);
+  }
+
+  /**
+   * Close database connection and ensure all data is saved
    */
   close(): void {
+    if (this.autoFlushInterval) {
+      clearInterval(this.autoFlushInterval);
+      this.autoFlushInterval = null;
+    }
+
     if (this.db) {
+      console.log('[ARGUS] Closing database and saving final state...');
       this.saveToFile();
       this.db.close();
       this.db = null;

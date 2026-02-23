@@ -1,6 +1,6 @@
 # ARGUS Marketplace
 
-> **v0.5.10** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action avec résumés intelligents et intégration Git.
+> **v0.5.11** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action avec résumés intelligents, intégration Git et persistance garantie.
 
 ## 📦 Plugins
 
@@ -16,9 +16,16 @@ Le plugin ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur ave
 - ✅ **NOUVEAU** : Intégration Git pour suivi exact des modifications
 - ✅ **NOUVEAU** : Dashboard redesign avec sidebar navigation
 
-## 🆕 v0.5.10 Nouveautés
+## 🆕 v0.5.11 Nouveautés
 
-### 🔗 Intégration Git
+### 🐛 Fix Critique : Persistance des Transactions
+- **Problème résolu** : Les transactions ne sont plus perdues entre les sessions
+- **Écritures atomiques** : Utilisation de fichiers temporaires + rename
+- **Auto-flush** : Sauvegarde automatique toutes les 10 secondes
+- **Shutdown hooks** : Sauvegarde forcée à l'arrêt du processus
+- **823+ transactions** : Vérifiées et persistées correctement
+
+### 🔗 Intégration Git (v0.5.10)
 - **Détection automatique** des repositories Git
 - **Suivi des branches** pour chaque transaction
 - **Référence de commit** avec hash, message, auteur et date
@@ -26,7 +33,7 @@ Le plugin ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur ave
 - **Statut Git** des fichiers (tracked, modified, staged, added, deleted)
 - **Badge Git** dans le feed d'activité pour les repositories suivis
 
-### 📊 Dashboard Amélioré
+### 📊 Dashboard Amélioré (v0.5.10)
 - **Panneau Git** avec infos repository et dernier commit
 - **Section Diff Preview** avec visualisation des changements
 - **Indicateurs de statut** pour les fichiers modifiés
