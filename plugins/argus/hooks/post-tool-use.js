@@ -26,8 +26,38 @@ async function postToolUse(toolName, args, result) {
     // Create a more descriptive prompt from the tool call
     let promptContent = `${toolName} called`;
 
-    // Include relevant arguments in the prompt
-    if (args && Object.keys(args).length > 0) {
+    // Capture edit/change preview for Edit/Write operations
+    let changePreview = null;
+    if (toolName === 'Edit' && args) {
+      const { file_path, old_string, new_string } = args;
+      if (old_string && new_string) {
+        changePreview = {
+          type: 'edit',
+          file: file_path,
+          oldLength: old_string.length,
+          newLength: new_string.length,
+          preview: {
+            removed: old_string.substring(0, 200) + (old_string.length > 200 ? '...' : ''),
+            added: new_string.substring(0, 200) + (new_string.length > 200 ? '...' : '')
+          }
+        };
+        promptContent = `Edit ${file_path}: ${old_string.substring(0, 50)}... → ${new_string.substring(0, 50)}...`;
+      }
+    } else if (toolName === 'Write' && args) {
+      const { file_path, content } = args;
+      if (content) {
+        changePreview = {
+          type: 'write',
+          file: file_path,
+          contentLength: content.length,
+          preview: content.substring(0, 200) + (content.length > 200 ? '...' : '')
+        };
+        promptContent = `Write ${file_path} (${content.length} chars)`;
+      }
+    }
+
+    // Include relevant arguments in the prompt (for non-edit operations)
+    if (!changePreview && args && Object.keys(args).length > 0) {
       const argSummary = Object.keys(args).slice(0, 3).map(key => {
         const value = args[key];
         if (typeof value === 'string') {
@@ -54,11 +84,12 @@ async function postToolUse(toolName, args, result) {
         success: true,
         output: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
         duration: 0,
-        toolsUsed: [toolName]
+        toolsUsed: [toolName],
+        changePreview: changePreview
       },
       metadata: {
         tags: [toolName, 'auto_captured'],
-        category: 'tool_execution'
+        category: changePreview ? 'file_modification' : 'tool_execution'
       }
     });
 
@@ -88,9 +119,9 @@ async function postToolUse(toolName, args, result) {
       // No stdin data - continue to env var fallback
     }
 
-    // Claude Code passes: { toolName, args, result } via stdin
-    const toolName = inputData.toolName || process.env.ARGUS_TOOL_NAME || 'unknown';
-    let args = inputData.args || {};
+    // Claude Code passes: { tool_name, tool_input, ... } via stdin
+    const toolName = inputData.toolName || inputData.tool_name || process.env.ARGUS_TOOL_NAME || 'unknown';
+    let args = inputData.args || inputData.tool_input || {};
     let result = inputData.result || {};
 
     // Fallback to env vars for args if not in stdin

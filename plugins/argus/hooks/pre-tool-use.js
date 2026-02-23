@@ -121,9 +121,9 @@ This ensures you don't duplicate work and follow established patterns.
       // No stdin data - continue to env var fallback
     }
 
-    // Claude Code passes: { toolName, args } via stdin
-    const toolName = inputData.toolName || process.env.ARGUS_TOOL_NAME || 'unknown';
-    let args = inputData.args || {};
+    // Claude Code passes: { tool_name, tool_input, ... } via stdin
+    const toolName = inputData.toolName || inputData.tool_name || process.env.ARGUS_TOOL_NAME || 'unknown';
+    let args = inputData.args || inputData.tool_input || {};
 
     // Fallback to env vars for args if not in stdin
     if (Object.keys(args).length === 0) {

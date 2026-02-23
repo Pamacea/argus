@@ -505,4 +505,8 @@ async function autoIndexProject(projectDir, pluginRoot) {
 
 sessionStart().catch(error => {
   console.error('[ARGUS] Fatal error during session start:', error);
+  process.exit(1);
+}).then(() => {
+  // Ensure clean exit
+  process.exit(0);
 });

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "ARGUS - Sentinelle omnisciente pour Claude Code. Force l'IA à consulter le contexte historique et technique avant toute action.",
-    "version": "0.5.7"
+    "version": "0.5.8"
   },
   "plugins": [
     {
       "name": "argus",
       "source": "./plugins/argus",
       "description": "Sentinelle omnisciente - Force l'IA à consulter le RAG, l'index et la documentation avant toute action Explore ou CreateTeam. Auto-index complet depuis la racine du projet. Dashboard redesign with sidebar navigation.",
-      "version": "0.5.7",
+      "version": "0.5.8",
       "author": {
         "name": "Oalacea"
       },

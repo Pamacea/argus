@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Pre-Prompt Hook
- *
- * Captures user prompts before they are sent to Claude.
- * This captures the initial user request/question.
+ * Pre-Prompt Hook - Captures user prompts before Claude processes them
  */
 
 const { queuePrompt } = require('./utils');
@@ -13,45 +10,75 @@ async function prePrompt(prompt, context) {
   console.log('[ARGUS] Capturing user prompt...');
 
   try {
-    // Queue the user prompt for storage
+    // Queue the prompt for storage
     queuePrompt({
-      prompt: prompt,
+      prompt: prompt.substring(0, 10000), // Limit to 10k chars
       context: {
         cwd: process.cwd(),
         platform: process.platform,
-        timestamp: new Date().toISOString()
+        timestamp: Date.now()
+      },
+      metadata: {
+        type: 'user_prompt',
+        length: prompt.length
       }
     });
 
-    console.log('[ARGUS] ✓ User prompt queued');
+    console.log('[ARGUS] ✓ Prompt queued for storage');
   } catch (error) {
     console.error('[ARGUS] Warning: Could not queue prompt:', error.message);
   }
 }
 
-// Main execution - Claude Code passes data via stdin
+// Main execution - Read from stdin as per Claude Code hooks spec
 (async () => {
   try {
-    // Read from stdin as per Claude Code hooks specification
     let inputData = {};
-    try {
-      const stdinBuffer = [];
-      for await (const chunk of process.stdin) {
-        stdinBuffer.push(chunk);
-      }
-      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
-      if (stdinData.trim()) {
+    let stdinData = '';
+
+    // Read stdin with timeout
+    const stdinPromise = new Promise((resolve) => {
+      let buffer = '';
+      process.stdin.on('data', (chunk) => {
+        buffer += chunk;
+      });
+      process.stdin.on('end', () => {
+        resolve(buffer);
+      });
+
+      // Timeout after 100ms
+      setTimeout(() => resolve(buffer), 100);
+    });
+
+    stdinData = await stdinPromise;
+
+    if (stdinData.trim()) {
+      try {
         inputData = JSON.parse(stdinData);
+      } catch (e) {
+        // Invalid JSON, continue
       }
-    } catch (e) {
-      // No stdin data - continue
     }
 
-    // Claude Code passes: { prompt, context } via stdin
-    let prompt = inputData.prompt || process.env.ARGUS_USER_PROMPT || '';
-    let context = inputData.context || JSON.parse(process.env.ARGUS_CONTEXT || '{}');
+    // Claude Code PrePrompt hook passes prompt directly via stdin or args
+    // The format can be: { prompt: "..." } or just the prompt text as string
+    let prompt = '';
+    let context = {};
 
-    await prePrompt(prompt, context);
+    if (typeof inputData === 'string') {
+      prompt = inputData;
+    } else if (inputData.prompt) {
+      prompt = inputData.prompt;
+      context = inputData.context || {};
+    } else {
+      // Fallback to command line args
+      prompt = process.argv[2] || '';
+    }
+
+    if (prompt) {
+      await prePrompt(prompt, context);
+    }
+
     process.exit(0);
   } catch (error) {
     console.error('[ARGUS] Error in pre-prompt hook:', error.message);

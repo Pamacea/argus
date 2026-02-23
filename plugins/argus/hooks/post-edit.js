@@ -113,9 +113,9 @@ async function postEdit(toolName, args, result) {
       // No stdin data or invalid JSON - try env vars as fallback
     }
 
-    // Claude Code passes: { toolName, args, result } via stdin
-    const toolName = inputData.toolName || process.env.ARGUS_TOOL_NAME || 'unknown';
-    const args = inputData.args || JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
+    // Claude Code passes: { tool_name, tool_input, ... } via stdin
+    const toolName = inputData.toolName || inputData.tool_name || process.env.ARGUS_TOOL_NAME || 'unknown';
+    const args = inputData.args || inputData.tool_input || JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
     const result = inputData.result || JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
 
     // Only process Edit/Write operations

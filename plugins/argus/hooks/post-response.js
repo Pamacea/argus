@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Post-Response Hook
- *
- * Captures Claude's response after it's generated.
- * This pairs with pre-prompt to create a complete conversation history.
+ * Post-Response Hook - Captures Claude's responses after generation
  */
 
 const { queueTransaction } = require('./utils');
@@ -13,57 +10,81 @@ async function postResponse(response, context) {
   console.log('[ARGUS] Capturing Claude response...');
 
   try {
-    // Queue the complete transaction (prompt + response)
+    // Queue the response as a transaction
     queueTransaction({
-      prompt: context.prompt || 'Unknown prompt',
-      promptType: 'user',
+      prompt: context.userPrompt || 'Claude response',
+      promptType: 'claude_response',
+      response: response.substring(0, 50000), // Limit to 50k chars
       context: {
         cwd: process.cwd(),
         platform: process.platform,
-        environment: process.env,
-        toolsAvailable: context.toolsAvailable || []
+        timestamp: Date.now()
       },
       result: {
         success: true,
-        output: response,
-        duration: context.duration || 0,
-        toolsUsed: context.toolsUsed || []
+        output: response.substring(0, 1000), // First 1k chars as preview
+        responseLength: response.length
       },
       metadata: {
-        tags: ['conversation', 'claude_response'],
+        tags: ['claude_response', 'conversation'],
         category: 'user_interaction'
       }
     });
 
-    console.log('[ARGUS] ✓ Response queued as transaction');
+    console.log('[ARGUS] ✓ Response queued for storage');
   } catch (error) {
     console.error('[ARGUS] Warning: Could not queue response:', error.message);
   }
 }
 
-// Main execution - Claude Code passes data via stdin
+// Main execution - Read from stdin as per Claude Code hooks spec
 (async () => {
   try {
-    // Read from stdin as per Claude Code hooks specification
     let inputData = {};
-    try {
-      const stdinBuffer = [];
-      for await (const chunk of process.stdin) {
-        stdinBuffer.push(chunk);
-      }
-      const stdinData = Buffer.concat(stdinBuffer).toString('utf8');
-      if (stdinData.trim()) {
+    let stdinData = '';
+
+    // Read stdin with timeout
+    const stdinPromise = new Promise((resolve) => {
+      let buffer = '';
+      process.stdin.on('data', (chunk) => {
+        buffer += chunk;
+      });
+      process.stdin.on('end', () => {
+        resolve(buffer);
+      });
+
+      // Timeout after 100ms
+      setTimeout(() => resolve(buffer), 100);
+    });
+
+    stdinData = await stdinPromise;
+
+    if (stdinData.trim()) {
+      try {
         inputData = JSON.parse(stdinData);
+      } catch (e) {
+        // Invalid JSON, continue
       }
-    } catch (e) {
-      // No stdin data or invalid JSON - try env vars as fallback
     }
 
-    // Claude Code passes: { response, context } via stdin
-    const response = inputData.response || process.env.ARGUS_CLAUDE_RESPONSE || '';
-    const context = inputData.context || JSON.parse(process.env.ARGUS_CONTEXT || '{}');
+    // Claude Code PostResponse hook passes response directly
+    let response = '';
+    let context = {};
 
-    await postResponse(response, context);
+    if (typeof inputData === 'string') {
+      response = inputData;
+    } else if (inputData.response) {
+      response = inputData.response;
+      context = inputData.context || {};
+    } else {
+      // Fallback
+      response = inputData.text || inputData.content || '';
+    }
+
+    if (response) {
+      await postResponse(response, context);
+    }
+
     process.exit(0);
   } catch (error) {
     console.error('[ARGUS] Error in post-response hook:', error.message);
