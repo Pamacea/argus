@@ -13,6 +13,12 @@ const {
   trackCommand,
   loadContext
 } = require('./context-tracker');
+const {
+  getChangePreviewWithGit,
+  isGitRepository,
+  getLastCommitInfo,
+  getCurrentBranch
+} = require('./git-utils');
 
 /**
  * Generate intelligent summary for a tool call
@@ -130,11 +136,25 @@ async function postToolUse(toolName, args, result) {
     // Create a more descriptive prompt from the tool call
     let promptContent = summary;
 
-    // Capture edit/change preview for Edit/Write operations
+    // Capture edit/change preview for Edit/Write operations with git integration
     let changePreview = null;
+    let gitPreview = null;
+    const cwd = process.cwd();
+
+    // Check git status once
+    if (isGitRepository(cwd)) {
+      gitPreview = {
+        branch: getCurrentBranch(cwd),
+        lastCommit: getLastCommitInfo(cwd)
+      };
+    }
+
     if (toolName === 'Edit' && args) {
       const { file_path, old_string, new_string } = args;
       if (old_string && new_string) {
+        // Get git-enhanced change preview
+        const gitPreview = getChangePreviewWithGit(toolName, args, cwd);
+
         changePreview = {
           type: 'edit',
           file: file_path,
@@ -143,17 +163,22 @@ async function postToolUse(toolName, args, result) {
           preview: {
             removed: old_string.substring(0, 200) + (old_string.length > 200 ? '...' : ''),
             added: new_string.substring(0, 200) + (new_string.length > 200 ? '...' : '')
-          }
+          },
+          ...(gitPreview.gitEnabled ? { git: gitPreview.git } : {})
         };
       }
     } else if (toolName === 'Write' && args) {
       const { file_path, content } = args;
       if (content) {
+        // Get git-enhanced change preview
+        const gitPreview = getChangePreviewWithGit(toolName, args, cwd);
+
         changePreview = {
           type: 'write',
           file: file_path,
           contentLength: content.length,
-          preview: content.substring(0, 200) + (content.length > 200 ? '...' : '')
+          preview: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+          ...(gitPreview.gitEnabled ? { git: gitPreview.git } : {})
         };
       }
     }
@@ -172,6 +197,15 @@ async function postToolUse(toolName, args, result) {
       promptContent += ` with ${argSummary}`;
     }
 
+    // Add git context if available
+    const gitContext = isGitRepository(cwd) ? {
+      git: {
+        enabled: true,
+        branch: gitPreview?.branch || null,
+        lastCommit: getLastCommitInfo(cwd)
+      }
+    } : {};
+
     // Queue transaction for processing by MCP server
     queueTransaction({
       prompt: promptContent,
@@ -179,10 +213,11 @@ async function postToolUse(toolName, args, result) {
       summary: summary,  // Human-readable summary
       intent: intent,    // Inferred intent
       context: {
-        cwd: process.cwd(),
+        cwd: cwd,
         platform: process.platform,
         toolsAvailable: [],
-        environment: process.env
+        environment: process.env,
+        ...gitContext
       },
       result: {
         success: true,
@@ -192,10 +227,11 @@ async function postToolUse(toolName, args, result) {
         changePreview: changePreview
       },
       metadata: {
-        tags: [toolName, 'auto_captured', intent],
+        tags: [toolName, 'auto_captured', intent, ...(gitContext.git ? ['git_tracked'] : [])],
         category: changePreview ? 'file_modification' : 'tool_execution',
         summary: summary,  // Also store in metadata for easy access
-        intent: intent
+        intent: intent,
+        ...gitContext
       }
     });
 
