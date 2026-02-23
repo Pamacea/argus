@@ -290,7 +290,7 @@ export class RAGEngine {
       console.error('Search failed:', error);
 
       // Final fallback to text search
-      const transactions = this.storage.searchTransactions(query.query, limit);
+      const transactions = await this.storage.searchTransactions(query.query, limit);
       return {
         hooks: [],
         relevantTransactions: transactions,
@@ -361,8 +361,8 @@ export class RAGEngine {
     totalHooks: number;
     usingQdrant: boolean;
   }> {
-    const transactions = this.storage.getTransactionsByDateRange(0, Date.now(), 1, 0);
-    const hooks = this.storage.getAllHooks();
+    const transactions = await this.storage.getTransactionsByDateRange(0, Date.now(), 1, 0);
+    const hooks = await this.storage.getAllHooks();
 
     // Note: This is a rough estimate, proper implementation would use COUNT queries
     return {

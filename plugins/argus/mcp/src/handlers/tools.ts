@@ -31,7 +31,7 @@ export async function handleCheckHooks(args: {
   });
 
   // Also get hooks directly for better accuracy
-  const allHooks = storage.getAllHooks();
+  const allHooks = await storage.getAllHooks();
 
   // Filter hooks by relevance
   const relevantHooks = ragResult.hooks.length > 0
@@ -205,10 +205,10 @@ export async function handleGetHistory(args: {
   let transactions;
 
   if (args.sessionId) {
-    transactions = storage.getTransactionsBySession(args.sessionId, args.limit || 50);
+    transactions = await storage.getTransactionsBySession(args.sessionId, args.limit || 50);
   } else {
     // Get all transactions and paginate
-    transactions = storage.getTransactionsByDateRange(
+    transactions = await storage.getTransactionsByDateRange(
       0,
       Date.now(),
       args.limit || 50,

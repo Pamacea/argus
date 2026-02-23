@@ -95,4 +95,4 @@ Transaction {
 
 ---
 
-*Architecture v0.5.0 - ARGUS*
+*Architecture v0.5.1 - ARGUS*
