@@ -452,7 +452,11 @@ async function handleRequest(req, res) {
                   tags: tags,
                   // Add extra context for display
                   toolName: tags[0] || 'unknown',
-                  isFileEdit: category === 'file_modification'
+                  isFileEdit: category === 'file_modification',
+                  // Include change preview for file modifications
+                  changePreview: data.result?.changePreview || null,
+                  // Include git context
+                  git: data.context?.git || data.metadata?.git || null
                 });
               } catch (e) {
                 // Skip malformed lines

@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.10] - 2026-02-23
+
+### ✨ New Features
+
+#### Git Integration for Exact Change Tracking
+- **Git Repository Detection** - Automatically detects git repositories and captures context
+- **Branch Tracking** - Records current git branch for every transaction
+- **Commit Reference** - Stores last commit hash, message, author, and date
+- **Diff Preview** - Captures git diff preview (500 chars) for file modifications
+- **File Status Tracking** - Records git status (tracked, modified, staged, added, deleted)
+- **Git Badge** - Activity feed shows ⚡ Git badge for tracked repositories
+
+#### Git Utils Module
+- **git-utils.js** - New module providing comprehensive git operations
+- **Efficient Git Commands** - All git operations run with timeouts and error handling
+- **Cross-Platform Support** - Works on Windows, macOS, and Linux
+- **Non-Breaking** - Gracefully degrades for non-git projects
+
+#### Enhanced Dashboard Display
+- **Git Info Panel** - Shows repository branch and last commit in transaction details
+- **Commit Details** - Displays commit hash (short), message, author, and date
+- **Diff Preview Section** - Shows git diff preview with syntax highlighting
+- **Git Status Indicators** - Visual indicators for file status (new, modified, staged)
+
+### 🔧 Improvements
+- **Enhanced changePreview** - Now includes git status and diff information
+- **Git-Tracked Tag** - Transactions in git repos get `git_tracked` tag
+- **Better Context** - Full git context stored in transaction metadata
+- **Recent Activity Git Badge** - Quick visual indicator for git-tracked actions
+
+### 📊 Transaction Structure
+
+#### Git Context Example:
+```json
+{
+  "git": {
+    "enabled": true,
+    "branch": "main",
+    "lastCommit": {
+      "hash": "f44ca382793f8fc497d9aef3725b0dc819e1e254",
+      "message": "UPDATE: Argus - v0.5.9",
+      "author": "Yanis",
+      "date": "2026-02-23 21:03:06 +0100"
+    }
+  }
+}
+```
+
+#### Change Preview with Git:
+```json
+{
+  "changePreview": {
+    "type": "edit",
+    "file": "/path/to/file.js",
+    "oldLength": 100,
+    "newLength": 150,
+    "preview": {
+      "removed": "...",
+      "added": "..."
+    },
+    "git": {
+      "status": {
+        "tracked": true,
+        "modified": true,
+        "staged": false
+      },
+      "diffPreview": "diff --git a/file.js b/file.js...",
+      "fullDiffAvailable": true
+    }
+  }
+}
+```
+
+### 🎯 Benefits
+- **Exact Change Tracking** - View precise what changed via git diff
+- **Commit References** - Link transactions to specific commits
+- **Branch Context** - Know which branch changes were made on
+- **Non-Invasive** - Works with existing Git Flow Master workflow
+- **Storage Efficient** - Stores references, not full file contents
+
+---
+
 ## [0.5.9] - 2026-02-23
 
 ### ✨ New Features

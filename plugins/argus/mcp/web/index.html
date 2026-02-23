@@ -562,6 +562,15 @@
       flex-shrink: 0;
     }
 
+    /* Activity Changes - Diff Preview */
+    .activity-changes {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      border-left: 2px solid var(--border-color);
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -1139,7 +1148,8 @@
     function generateActivitySummary(tx) {
       const toolName = tx.toolName || 'Unknown';
       const timeAgo = getTimeAgo(tx.timestamp);
-      const hasGit = tx.git && tx.git.enabled;
+      const hasGit = tx.tags && tx.tags.includes('git_tracked');
+      const hasChanges = tx.changePreview && (tx.changePreview.preview || tx.changePreview.preview?.added || tx.changePreview.preview?.removed);
 
       if (tx.category === 'file_modification' || tx.isFileEdit) {
         // File modification summary - ULTRA SHORT
@@ -1157,7 +1167,8 @@
             title: `Modified ${file}`,
             description: why.length > 40 ? why.substring(0, 40) + '...' : why,
             time: timeAgo,
-            git: hasGit
+            git: hasGit,
+            changePreview: hasChanges ? tx.changePreview : null
           };
         } else if (tx.prompt.includes('Write')) {
           const match = tx.prompt.match(/Write (.+?) \(/);
@@ -1173,7 +1184,8 @@
             title: `Created ${file}`,
             description: why.length > 40 ? why.substring(0, 40) + '...' : why,
             time: timeAgo,
-            git: hasGit
+            git: hasGit,
+            changePreview: hasChanges ? tx.changePreview : null
           };
         }
       }
@@ -1189,18 +1201,22 @@
               icon: '⚡',
               title: 'Ran command',
               description: desc.length > 50 ? desc.substring(0, 50) + '...' : desc,
-              time: timeAgo
+              time: timeAgo,
+              git: hasGit,
+              changePreview: null
             };
           }
           break;
         case 'Task':
-          const descMatch = tx.prompt.match(/Launched (.+?) agent: (.+)/);
-          if (descMatch) {
+          const taskMatch = tx.prompt.match(/Launched (.+?) agent: (.+)/);
+          if (taskMatch) {
             return {
               icon: '🤖',
-              title: `Used ${descMatch[1]} agent`,
-              description: descMatch[2].length > 50 ? descMatch[2].substring(0, 50) + '...' : descMatch[2],
-              time: timeAgo
+              title: `Used ${taskMatch[1]} agent`,
+              description: taskMatch[2].length > 50 ? taskMatch[2].substring(0, 50) + '...' : taskMatch[2],
+              time: timeAgo,
+              git: hasGit,
+              changePreview: null
             };
           }
           break;
@@ -1212,47 +1228,10 @@
         icon: '🔧',
         title: toolName,
         description: prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt,
-        time: timeAgo
+        time: timeAgo,
+        git: hasGit,
+        changePreview: null
       };
-    }
-          const cmd = cmdMatch ? cmdMatch[1] : 'command';
-          return {
-            icon: '⚡',
-            title: `Executed ${cmd.split(' ')[0]} ${cmd.split(' ')[1] || ''}`,
-            description: `Ran: ${cmd.substring(0, 60)}${cmd.length > 60 ? '...' : ''}`,
-            time: timeAgo
-          };
-        case 'Read':
-          const fileMatch = tx.prompt.match(/file_path="([^"]+)"/);
-          const file = fileMatch ? fileMatch[1].split(/[/\\]/).pop() : 'file';
-          return {
-            icon: '📖',
-            title: `Read ${file}`,
-            description: 'Analyzed file contents',
-            time: timeAgo
-          };
-        case 'Edit':
-          return {
-            icon: '📝',
-            title: 'Modified code',
-            description: tx.prompt.substring(0, 80) + '...',
-            time: timeAgo
-          };
-        case 'Write':
-          return {
-            icon: '✨',
-            title: 'Created file',
-            description: tx.prompt.substring(0, 80) + '...',
-            time: timeAgo
-          };
-        default:
-          return {
-            icon: '🔧',
-            title: toolName,
-            description: tx.prompt.substring(0, 100) + '...',
-            time: timeAgo
-          };
-      }
     }
 
     function getTimeAgo(timestamp) {
@@ -1284,6 +1263,30 @@
                     ${activity.git ? `<span class="git-badge">⚡ Git</span>` : ''}
                   </div>
                   <div class="activity-description">${escapeHtml(activity.description)}</div>
+                  ${activity.changePreview ? `
+                  <div class="activity-changes">
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.8rem;">
+                      ${activity.changePreview.preview?.added ? `
+                      <div style="flex: 1;">
+                        <div style="color: #22c55e; font-weight: 500; margin-bottom: 0.25rem;">+ Added:</div>
+                        <div style="background: rgba(34, 197, 94, 0.1); padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.75rem; color: #22c55e;">${escapeHtml(activity.changePreview.preview.added.substring(0, 100))}${activity.changePreview.preview.added.length > 100 ? '...' : ''}</div>
+                      </div>
+                      ` : ''}
+                      ${activity.changePreview.preview?.removed ? `
+                      <div style="flex: 1;">
+                        <div style="color: #ef4444; font-weight: 500; margin-bottom: 0.25rem;">- Removed:</div>
+                        <div style="background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.75rem; color: #ef4444;">${escapeHtml(activity.changePreview.preview.removed.substring(0, 100))}${activity.changePreview.preview.removed.length > 100 ? '...' : ''}</div>
+                      </div>
+                      ` : ''}
+                      ${activity.changePreview.preview && !activity.changePreview.preview.added && !activity.changePreview.preview.removed ? `
+                      <div style="flex: 1;">
+                        <div style="color: var(--text-secondary); font-weight: 500; margin-bottom: 0.25rem;">Content:</div>
+                        <div style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.75rem;">${escapeHtml(activity.changePreview.preview.substring(0, 100))}${activity.changePreview.preview.length > 100 ? '...' : ''}</div>
+                      </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                  ` : ''}
                 </div>
                 <div class="activity-time">${activity.time}</div>
               </div>

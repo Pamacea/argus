@@ -1,6 +1,6 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.9 | **License:** MIT
+**Version:** 0.5.10 | **License:** MIT
 
 ---
 
@@ -14,7 +14,49 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ---
 
-## ✨ Key Features (v0.5.9)
+## ✨ Key Features (v0.5.10)
+
+### 🔗 Git Integration (NEW in v0.5.10)
+- **Automatic Git Detection** - Recognizes git repositories and captures context
+- **Branch Tracking** - Records current git branch for every transaction
+- **Commit References** - Stores last commit hash, message, author, and date
+- **Diff Preview** - Captures git diff preview (500 chars) for file modifications
+- **File Status Tracking** - Records git status (tracked, modified, staged, added, deleted)
+- **Git Badge** - Activity feed shows ⚡ Git badge for tracked repositories
+- **Non-Breaking** - Gracefully degrades for non-git projects
+
+**Git Integration Example:**
+```json
+{
+  "git": {
+    "enabled": true,
+    "branch": "main",
+    "lastCommit": {
+      "hash": "f44ca382793f8fc497d9aef3725b0dc819e1e254",
+      "message": "UPDATE: Argus - v0.5.9",
+      "author": "Yanis",
+      "date": "2026-02-23 21:03:06 +0100"
+    }
+  }
+}
+```
+
+**Change Preview with Git:**
+```json
+{
+  "changePreview": {
+    "type": "edit",
+    "file": "/path/to/file.js",
+    "oldLength": 100,
+    "newLength": 150,
+    "git": {
+      "status": { "tracked": true, "modified": true },
+      "diffPreview": "diff --git a/file.js b/file.js...",
+      "fullDiffAvailable": true
+    }
+  }
+}
+```
 
 ### 🎨 Complete Dashboard Redesign
 - **New Sidebar Navigation** - Clean left sidebar with icons for all sections
@@ -30,8 +72,8 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 
 ### 📊 Dashboard Sections
 - **Overview** - Index statistics at a glance
-- **Recent Activity** - Live feed of recent transactions
-- **History/Log** - Complete searchable transaction history
+- **Recent Activity** - Live feed of recent transactions with git badges
+- **History/Log** - Complete searchable transaction history with git details
 - **Memory Engine** - Storage and search engine status
 - **MCP Tools** - List of all available MCP tools
 - **Server Endpoints** - Server information and process details
@@ -48,7 +90,7 @@ ARGUS is a context-aware memory system for Claude Code that forces the AI to con
 - **Smart Filtering** - Ignores node_modules, .git, dist, build
 - **Persistent Index** - Index data saved between sessions
 
-### 🧠 Intelligent Summaries (NEW in v0.5.9)
+### 🧠 Intelligent Summaries (v0.5.9)
 - **Human-Readable Descriptions** - Every action gets a clear, contextual summary
 - **Task Context Tracking** - Knows WHAT you're working on (feature, bugfix, refactor, etc.)
 - **Enhanced Recent Activity** - Shows "Building feature: Modified file.js" instead of "Edit file.js..."
@@ -69,14 +111,15 @@ After:  Setting up: Created install-mcp.js
 
 ### 🪝 Smart Hooks
 - **PreToolUse** - Intercepts Explore and CreateTeam before execution
-- **PostToolUse** - Captures Edit/Write operations with detailed tracking
+- **PostToolUse** - Captures Edit/Write operations with detailed tracking and git info
 - **SessionStart** - Initializes ARGUS and auto-indexes current project
 - **Stop** - Persists state on session shutdown
 
 ### 📊 Web Dashboard
 - **Real-time Monitoring** at `http://localhost:30000`
 - **Indexed Projects** - View all indexed projects with file counts
-- **Transaction History** - Complete audit trail
+- **Transaction History** - Complete audit trail with git integration
+- **Git Info Panels** - Shows branch, commit, and diff information
 - **API Endpoints** - RESTful API for all data
 
 ### 🔧 MCP Integration
