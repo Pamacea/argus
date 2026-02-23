@@ -105,6 +105,150 @@ function startWebServer(pluginRoot) {
 }
 
 /**
+ * Check if Docker command is available
+ */
+function isDockerAvailable() {
+  return new Promise((resolve) => {
+    exec('docker --version', (error) => {
+      resolve(!error);
+    });
+  });
+}
+
+/**
+ * Check if Qdrant container is already running
+ */
+function isQdrantRunning() {
+  return new Promise((resolve) => {
+    exec('docker ps --filter name=argus-qdrant --format "{{.Names}}"', (error, stdout) => {
+      resolve(stdout.trim().includes('argus-qdrant'));
+    });
+  });
+}
+
+/**
+ * Check if Qdrant container exists (but may be stopped)
+ */
+function qdrantContainerExists() {
+  return new Promise((resolve) => {
+    exec('docker ps -a --filter name=argus-qdrant --format "{{.Names}}"', (error, stdout) => {
+      resolve(stdout.trim().includes('argus-qdrant'));
+    });
+  });
+}
+
+/**
+ * Start Qdrant container
+ */
+async function startQdrant() {
+  const { spawn } = require('child_process');
+
+  return new Promise((resolve) => {
+    console.log('[ARGUS] → Starting Qdrant vector database...');
+
+    const args = [
+      'run',
+      '-d',
+      '--name', 'argus-qdrant',
+      '-p', '6333:6333',
+      '-p', '6334:6334',
+      '-v', 'argus-qdrant-data:/qdrant/storage',
+      'qdrant/qdrant:latest'
+    ];
+
+    const docker = spawn('docker', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true
+    });
+
+    let output = '';
+    let errorOutput = '';
+
+    docker.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    docker.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    docker.on('close', (code) => {
+      if (code === 0) {
+        console.log('[ARGUS] ✓ Qdrant container started');
+        resolve(true);
+      } else {
+        console.error('[ARGUS] ✗ Failed to start Qdrant:', errorOutput);
+        resolve(false);
+      }
+    });
+
+    docker.on('error', (err) => {
+      console.error('[ARGUS] ✗ Docker error:', err.message);
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Ensure Qdrant is running
+ */
+async function ensureQdrant() {
+  const dockerAvailable = await isDockerAvailable();
+
+  if (!dockerAvailable) {
+    console.log('[ARGUS] ℹ Docker not available, skipping Qdrant auto-start');
+    console.log('[ARGUS]   → Install Docker to enable vector search with Qdrant');
+    return false;
+  }
+
+  const qdrantRunning = await isQdrantRunning();
+
+  if (qdrantRunning) {
+    console.log('[ARGUS] ✓ Qdrant already running on http://localhost:6333');
+    return true;
+  }
+
+  const containerExists = await qdrantContainerExists();
+
+  if (containerExists) {
+    console.log('[ARGUS] → Starting existing Qdrant container...');
+    const started = await new Promise((resolve) => {
+      exec('docker start argus-qdrant', (error, stdout, stderr) => {
+        if (error) {
+          // Check if it's a Docker daemon error
+          if (stderr.includes('daemon') || stderr.includes('pipe')) {
+            console.log('[ARGUS] ℹ Docker daemon not running - will use local search');
+            console.log('[ARGUS]   → Start Docker Desktop and restart session for Qdrant');
+          } else {
+            console.error('[ARGUS] ✗ Failed to start Qdrant:', error.message);
+          }
+          resolve(false);
+        } else {
+          console.log('[ARGUS] ✓ Qdrant container started');
+          resolve(true);
+        }
+      });
+    });
+
+    if (started) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    return started;
+  }
+
+  // Create and start new container
+  console.log('[ARGUS] → Creating new Qdrant container...');
+  const started = await startQdrant();
+
+  if (started) {
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  return started;
+}
+
+/**
  * Ensure web dashboard is running
  */
 async function ensureWebDashboard(pluginRoot) {
@@ -167,8 +311,19 @@ async function sessionStart() {
   const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
   if (pluginRoot) {
     console.log(`[ARGUS] ✓ Plugin root: ${pluginRoot}`);
+
+    // Start Qdrant if Docker is available
+    const qdrantRunning = await ensureQdrant();
+
     // Ensure web dashboard is running
     await ensureWebDashboard(pluginRoot);
+
+    // Update session info based on Qdrant status
+    if (qdrantRunning) {
+      console.log('[ARGUS] ✓ Vector search enabled (Qdrant)');
+    } else {
+      console.log('[ARGUS] ℹ Using local search (SQLite)');
+    }
   } else {
     console.warn('[ARGUS] ⚠ CLAUDE_PLUGIN_ROOT not set');
   }
@@ -178,8 +333,9 @@ async function sessionStart() {
   const HOST = process.env.ARGUS_WEB_HOST || 'localhost';
 
   console.log('[ARGUS] ');
-  console.log('[ARGUS] Web Dashboard:');
-  console.log(`[ARGUS]   → http://${HOST}:${PORT}`);
+  console.log('[ARGUS] Services:');
+  console.log(`[ARGUS]   → Web Dashboard: http://${HOST}:${PORT}`);
+  console.log(`[ARGUS]   → Qdrant Vector DB: http://localhost:6333`);
   console.log('[ARGUS] ');
   console.log('[ARGUS] Hooks Active:');
   console.log('[ARGUS]   • PreToolUse  → Intercepts Explore/CreateTeam');

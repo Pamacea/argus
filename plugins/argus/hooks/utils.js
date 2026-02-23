@@ -8,6 +8,91 @@ const path = require('path');
 // Session state file path
 const SESSION_STATE_PATH = path.join(process.env.CLAUDE_PLUGIN_ROOT, '.session-state.json');
 
+// Queue file paths for persistence
+const QUEUE_DIR = path.join(process.env.ARGUS_DATA_DIR || path.join(require('os').homedir(), '.argus'), 'queue');
+const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.json');
+const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.json');
+const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.json');
+
+/**
+ * Ensure queue directory exists
+ */
+function ensureQueueDir() {
+  try {
+    if (!fs.existsSync(QUEUE_DIR)) {
+      fs.mkdirSync(QUEUE_DIR, { recursive: true });
+    }
+  } catch (error) {
+    console.error('[ARGUS] Failed to create queue dir:', error.message);
+  }
+}
+
+/**
+ * Load queue from file
+ */
+function loadQueue(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error(`[ARGUS] Failed to load queue from ${filePath}:`, error.message);
+  }
+  return [];
+}
+
+/**
+ * Save queue to file
+ */
+function saveQueue(filePath, queue) {
+  try {
+    ensureQueueDir();
+    fs.writeFileSync(filePath, JSON.stringify(queue, null, 2));
+  } catch (error) {
+    console.error(`[ARGUS] Failed to save queue to ${filePath}:`, error.message);
+  }
+}
+
+/**
+ * Queue an edit operation for later processing
+ */
+function queueEdit(editData) {
+  const queue = loadQueue(EDIT_QUEUE_PATH);
+  queue.push({
+    ...editData,
+    timestamp: Date.now()
+  });
+  saveQueue(EDIT_QUEUE_PATH, queue);
+  console.log('[ARGUS] ✓ Queued edit for processing');
+}
+
+/**
+ * Queue a transaction for memory storage
+ */
+function queueTransaction(transaction) {
+  const queue = loadQueue(TRANSACTION_QUEUE_PATH);
+  queue.push({
+    ...transaction,
+    timestamp: Date.now()
+  });
+  saveQueue(TRANSACTION_QUEUE_PATH, queue);
+  console.log('[ARGUS] ✓ Queued transaction for memory');
+}
+
+/**
+ * Queue a prompt for analysis
+ */
+function queuePrompt(promptData) {
+  const queue = loadQueue(PROMPT_QUEUE_PATH);
+  queue.push({
+    ...promptData,
+    timestamp: Date.now()
+  });
+  saveQueue(PROMPT_QUEUE_PATH, queue);
+  console.log('[ARGUS] ✓ Queued prompt for analysis');
+}
+
 /**
  * Load session state from disk
  */
@@ -109,5 +194,12 @@ module.exports = {
   requiresHookCheck,
   parseToolName,
   cleanupSessionState,
+  queueEdit,
+  queueTransaction,
+  queuePrompt,
   SESSION_STATE_PATH,
+  EDIT_QUEUE_PATH,
+  TRANSACTION_QUEUE_PATH,
+  PROMPT_QUEUE_PATH,
+  QUEUE_DIR,
 };
