@@ -1,0 +1,169 @@
+name: ARGUS Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'plugins/argus/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'plugins/argus/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: plugins/argus/mcp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: plugins/argus/mcp
+        run: npm ci
+
+      - name: Run tests
+        working-directory: plugins/argus/mcp
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: plugins/argus/mcp/coverage/lcov.info
+          flags: argus
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage artifacts
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: plugins/argus/mcp/coverage/
+          retention-days: 7
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: plugins/argus/mcp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: plugins/argus/mcp
+        run: npm ci
+
+      - name: Run type check
+        working-directory: plugins/argus/mcp
+        run: npm run typecheck
+
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: plugins/argus/mcp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: plugins/argus/mcp
+        run: npm ci
+
+      - name: Run ESLint (if configured)
+        working-directory: plugins/argus/mcp
+        run: npm run lint || true
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: plugins/argus/mcp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: plugins/argus/mcp
+        run: npm ci
+
+      - name: Build project
+        working-directory: plugins/argus/mcp
+        run: npm run build
+
+  coverage-summary:
+    name: Coverage Summary
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: plugins/argus/mcp/coverage/
+
+      - name: Generate coverage summary
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: plugins/argus/mcp/coverage/lcov.info
+          flags: argus
+          name: coverage-summary
+          fail_ci_if_error: false
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: ./plugins/argus/mcp/coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}

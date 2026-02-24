@@ -8,7 +8,14 @@
     "watch": "node build.js --watch",
     "dev": "node --watch server.js",
     "typecheck": "tsc --noEmit",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui",
+    "benchmark": "node dist/benchmarks/performance-benchmark.js",
+    "benchmark:compare": "node -e 'const fs=require(\"fs\"); const prev=JSON.parse(fs.readFileSync(\"benchmark-results.json\")); import(\"./dist/benchmarks/performance-benchmark.js\").then(m=>new m.default().compareWithPrevious(prev.results))'"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
@@ -22,6 +29,9 @@
     "@types/node": "^22.10.5",
     "@types/uuid": "^10.0.0",
     "esbuild": "^0.24.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/ui": "^2.1.8"
   }
 }
