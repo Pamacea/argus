@@ -1461,7 +1461,17 @@
             </div>
             <div style="display: flex; gap: 2rem; font-size: 0.875rem; color: var(--text-secondary);">
               <span>📄 <strong>${project.fileCount || 0}</strong> files</span>
-              <span>🕒 ${formatDuration((Date.now() - (project.lastIndexed || project.timestamp)) / 1000)} ago</span>
+              <span>🕒 ${(() => {
+                const timestamp = project.lastIndexed || project.timestamp;
+                if (!timestamp || timestamp === 0 || isNaN(new Date(timestamp).getTime())) {
+                  return 'Unknown';
+                }
+                const seconds = (Date.now() - new Date(timestamp).getTime()) / 1000;
+                if (isNaN(seconds) || seconds < 0) {
+                  return 'Unknown';
+                }
+                return formatDuration(seconds) + ' ago';
+              })()}</span>
             </div>
           </div>
         `).join('');

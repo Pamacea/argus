@@ -6,19 +6,29 @@
  * Captures tool results and queues them for ARGUS memory processing.
  */
 
-const { queueTransaction } = require('./utils');
+const path = require('path');
+
+// Get the directory of THIS hook file
+// process.argv[1] is the path to the script being executed
+const hookScriptPath = process.argv[1];
+const hookDir = path.dirname(hookScriptPath);
+
+// Resolve requires relative to hook directory
+const { queueTransaction, recordHookExecution } = require(path.join(hookDir, 'utils'));
 const {
   getEnhancedSummary,
   trackFileModification,
   trackCommand,
   loadContext
-} = require('./context-tracker');
+} = require(path.join(hookDir, 'context-tracker'));
+
+const HOOK_START_TIME = Date.now();
 const {
   getChangePreviewWithGit,
   isGitRepository,
   getLastCommitInfo,
   getCurrentBranch
-} = require('./git-utils');
+} = require(path.join(hookDir, 'git-utils'));
 
 /**
  * Generate intelligent summary for a tool call
@@ -257,35 +267,35 @@ async function postToolUse(toolName, args, result) {
       }
       stdinDataStr = Buffer.concat(stdinBuffer).toString('utf8');
 
-      // Debug: Log what we received
+      // Parse stdin data
       if (stdinDataStr.trim()) {
-        console.error('[ARGUS DEBUG] Raw stdin:', stdinDataStr.substring(0, 500));
+        // console.error('[ARGUS DEBUG] Raw stdin:', stdinDataStr.substring(0, 500));
         inputData = JSON.parse(stdinDataStr);
       }
     } catch (e) {
       console.error('[ARGUS] Stdin parse error:', e.message);
-      console.error('[ARGUS DEBUG] Raw stdin length:', stdinDataStr.length);
+      // console.error('[ARGUS DEBUG] Raw stdin length:', stdinDataStr.length);
     }
 
-    // Debug: Log what we parsed
-    console.error('[ARGUS DEBUG] Parsed inputData keys:', Object.keys(inputData));
-    console.error('[ARGUS DEBUG] inputData:', JSON.stringify(inputData).substring(0, 500));
+    // Debug disabled
+    // console.error('[ARGUS DEBUG] Parsed inputData keys:', Object.keys(inputData));
+    // console.error('[ARGUS DEBUG] inputData:', JSON.stringify(inputData).substring(0, 500));
 
     // Claude Code passes: { tool_name, tool_input, ... } via stdin
     const toolName = inputData.toolName || inputData.tool_name || process.env.ARGUS_TOOL_NAME || 'unknown';
     let args = inputData.args || inputData.tool_input || inputData.input || {};
     let result = inputData.result || inputData.output || {};
 
-    // Debug: Log extracted values
-    console.error('[ARGUS DEBUG] toolName:', toolName);
-    console.error('[ARGUS DEBUG] args keys:', Object.keys(args));
-    console.error('[ARGUS DEBUG] result type:', typeof result);
+    // Debug disabled
+    // console.error('[ARGUS DEBUG] toolName:', toolName);
+    // console.error('[ARGUS DEBUG] args keys:', Object.keys(args));
+    // console.error('[ARGUS DEBUG] result type:', typeof result);
 
     // Fallback to env vars for args if not in stdin
     if (Object.keys(args).length === 0) {
       try {
         args = JSON.parse(process.env.ARGUS_TOOL_ARGS || '{}');
-        console.error('[ARGUS DEBUG] Using env args, keys:', Object.keys(args));
+        // console.error('[ARGUS DEBUG] Using env args, keys:', Object.keys(args));
       } catch (e) {
         console.error('[ARGUS] Failed to parse args:', e.message);
       }
@@ -295,18 +305,22 @@ async function postToolUse(toolName, args, result) {
     if (Object.keys(result).length === 0 || (typeof result === 'object' && Object.keys(result).length === 0)) {
       try {
         result = JSON.parse(process.env.ARGUS_TOOL_RESULT || '{}');
-        console.error('[ARGUS DEBUG] Using env result');
+        // console.error('[ARGUS DEBUG] Using env result');
       } catch (e) {
         // Result might not be JSON, use as-is
         result = { output: process.env.ARGUS_TOOL_RESULT || '' };
-        console.error('[ARGUS DEBUG] Using env result as string');
+        // console.error('[ARGUS DEBUG] Using env result as string');
       }
     }
 
     await postToolUse(toolName, args, result);
+    const duration = Date.now() - HOOK_START_TIME;
+    recordHookExecution('post-tool-use', 'PostToolUse', process.cwd(), duration);
     process.exit(0);
   } catch (error) {
     console.error('[ARGUS] Error in post-tool-use hook:', error.message);
+    const duration = Date.now() - HOOK_START_TIME;
+    recordHookExecution('post-tool-use', 'PostToolUse', process.cwd(), duration);
     process.exit(0); // Don't fail the hook
   }
 })();

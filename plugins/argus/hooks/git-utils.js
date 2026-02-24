@@ -12,18 +12,63 @@ const path = require('path');
 const fs = require('fs');
 
 /**
+ * Custom Git Error class
+ */
+class GitError extends Error {
+  constructor(message, code, context = {}) {
+    super(message);
+    this.name = 'GitError';
+    this.code = code;
+    this.context = context;
+  }
+
+  getFormattedMessage() {
+    let msg = `[GIT_ERROR:${this.code}] ${this.message}`;
+    if (Object.keys(this.context).length > 0) {
+      msg += '\nContext: ' + JSON.stringify(this.context, null, 2);
+    }
+    return msg;
+  }
+}
+
+/**
+ * Safe git command execution with error handling
+ */
+function safeGitExec(command, options = {}) {
+  const defaultOptions = {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+    timeout: 5000,
+    ...options
+  };
+
+  try {
+    return execSync(command, defaultOptions).toString().trim();
+  } catch (error) {
+    throw new GitError(
+      error.message || `Git command failed: ${command}`,
+      'GIT_EXEC_FAILED',
+      { command, cwd: defaultOptions.cwd, originalError: error.message }
+    );
+  }
+}
+
+/**
  * Check if a directory is inside a git repository
  */
 function isGitRepository(dir) {
   try {
-    const gitDir = execSync('git rev-parse --git-dir', {
+    const gitDir = safeGitExec('git rev-parse --git-dir', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
 
     return gitDir && fs.existsSync(path.join(dir, gitDir));
   } catch (error) {
+    if (error instanceof GitError) {
+      // Silently fail - not a git repo is expected
+      return false;
+    }
     return false;
   }
 }
@@ -33,12 +78,12 @@ function isGitRepository(dir) {
  */
 function getCurrentBranch(dir) {
   try {
-    return execSync('git rev-parse --abbrev-ref HEAD', {
+    return safeGitExec('git rev-parse --abbrev-ref HEAD', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
   } catch (error) {
+    console.warn(`[ARGUS] Failed to get git branch: ${error instanceof GitError ? error.message : error}`);
     return null;
   }
 }
@@ -48,12 +93,12 @@ function getCurrentBranch(dir) {
  */
 function getLastCommitHash(dir) {
   try {
-    return execSync('git rev-parse HEAD', {
+    return safeGitExec('git rev-parse HEAD', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
   } catch (error) {
+    console.warn(`[ARGUS] Failed to get last commit hash: ${error instanceof GitError ? error.message : error}`);
     return null;
   }
 }
@@ -66,15 +111,14 @@ function getFileDiff(filePath, dir) {
     const relativePath = path.relative(dir, filePath);
 
     // Get unified diff
-    const diff = execSync(`git diff --unified=3 -- "${relativePath}"`, {
+    const diff = safeGitExec(`git diff --unified=3 -- "${relativePath}"`, {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 5000
-    }).toString().trim();
+    });
 
     return diff || null;
   } catch (error) {
-    // File might not be tracked yet
+    // File might not be tracked yet - this is expected
     return null;
   }
 }
@@ -86,14 +130,14 @@ function getStagedDiff(filePath, dir) {
   try {
     const relativePath = path.relative(dir, filePath);
 
-    const diff = execSync(`git diff --staged --unified=3 -- "${relativePath}"`, {
+    const diff = safeGitExec(`git diff --staged --unified=3 -- "${relativePath}"`, {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 5000
-    }).toString().trim();
+    });
 
     return diff || null;
   } catch (error) {
+    // No staged changes - this is expected
     return null;
   }
 }
@@ -106,11 +150,10 @@ function getFileGitInfo(filePath, dir) {
     const relativePath = path.relative(dir, filePath);
 
     // Get git status for the file
-    const status = execSync(`git status --porcelain -- "${relativePath}"`, {
+    const status = safeGitExec(`git status --porcelain -- "${relativePath}"`, {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
 
     if (!status) {
       return {
@@ -132,6 +175,7 @@ function getFileGitInfo(filePath, dir) {
       status: statusCode
     };
   } catch (error) {
+    console.warn(`[ARGUS] Failed to get git file info: ${error instanceof GitError ? error.message : error}`);
     return {
       tracked: false,
       modified: false,
@@ -205,12 +249,12 @@ function getChangePreviewWithGit(toolName, args, cwd) {
  */
 function getLastCommitMessage(dir) {
   try {
-    return execSync('git log -1 --pretty=%s', {
+    return safeGitExec('git log -1 --pretty=%s', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
   } catch (error) {
+    console.warn(`[ARGUS] Failed to get commit message: ${error instanceof GitError ? error.message : error}`);
     return null;
   }
 }
@@ -224,24 +268,24 @@ function getLastCommitInfo(dir) {
     if (!hash) return null;
 
     const message = getLastCommitMessage(dir);
-    const author = execSync('git log -1 --pretty=%an', {
+    const author = safeGitExec('git log -1 --pretty=%an', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
-    const date = execSync('git log -1 --pretty=%ci', {
+    });
+    const date = safeGitExec('git log -1 --pretty=%ci', {
       cwd: dir,
-      stdio: 'pipe',
       timeout: 2000
-    }).toString().trim();
+    });
 
     return { hash, message, author, date };
   } catch (error) {
+    console.warn(`[ARGUS] Failed to get commit info: ${error instanceof GitError ? error.message : error}`);
     return null;
   }
 }
 
 module.exports = {
+  GitError,
   isGitRepository,
   getCurrentBranch,
   getLastCommitHash,

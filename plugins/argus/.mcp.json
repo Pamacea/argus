@@ -3,7 +3,7 @@
     "plugin:argus:argus": {
       "type": "stdio",
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/dist/server.bundle.mjs"],
       "env": {
         "ARGUS_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
       }

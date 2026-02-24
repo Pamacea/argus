@@ -9,6 +9,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { Transaction, Hook, SearchQuery, RAGResult } from '../types/index.js';
 import { getStorage } from '../storage/database.js';
 import LocalSemanticSearch from '../semantic/local-semantic.js';
+import {
+  QdrantError,
+  ConfigError,
+  handleError,
+  safeExecute,
+  safeExecuteWithRetry
+} from '../errors/index.js';
+import { retry } from '../errors/retry.js';
 
 export interface RAGConfig {
   qdrantUrl?: string;
@@ -31,29 +39,44 @@ export interface EmbeddingOptions {
 async function generateEmbedding(text: string, options: EmbeddingOptions): Promise<Float32Array> {
   if (options.provider === 'openai') {
     if (!options.apiKey) {
-      throw new Error('OpenAI API key is required for OpenAI embeddings');
+      throw ConfigError.missingConfig('OpenAI API key');
     }
 
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${options.apiKey}`
-      },
-      body: JSON.stringify({
-        model: options.modelName || 'text-embedding-3-small',
-        input: text,
-        dimensions: 1536
-      })
-    });
+    try {
+      const response = await retry(
+        async () => {
+          const res = await fetch('https://api.openai.com/v1/embeddings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${options.apiKey}`
+            },
+            body: JSON.stringify({
+              model: options.modelName || 'text-embedding-3-small',
+              input: text,
+              dimensions: 1536
+            })
+          });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+          if (!res.ok) {
+            throw new Error(`OpenAI API error: ${res.statusText}`);
+          }
+
+          return res;
+        },
+        { maxAttempts: 3, initialDelay: 1000 }
+      );
+
+      const data = (await response.json()) as any;
+      const embedding = data.data[0].embedding;
+      return new Float32Array(embedding);
+    } catch (error) {
+      throw new QdrantError(
+        `Failed to generate embedding with OpenAI: ${error instanceof Error ? error.message : String(error)}`,
+        { provider: 'openai', textLength: text.length },
+        error instanceof Error ? error : undefined
+      );
     }
-
-    const data = (await response.json()) as any;
-    const embedding = data.data[0].embedding;
-    return new Float32Array(embedding);
   } else {
     // Local embedding (placeholder - would integrate with local models)
     // For now, return a simple hash-based embedding
@@ -129,25 +152,46 @@ export class RAGEngine {
         apiKey: this.config.qdrantApiKey || undefined
       });
 
-      // Check if Qdrant is available
-      await this.qdrant.getCollections();
+      // Check if Qdrant is available with retry
+      await safeExecuteWithRetry(
+        async () => {
+          await this.qdrant!.getCollections();
+        },
+        undefined,
+        {
+          maxAttempts: 3,
+          initialDelay: 1000,
+          context: { operation: 'getCollections', url: this.config.qdrantUrl }
+        }
+      );
 
       // Ensure collection exists
       const collections = await this.qdrant.getCollections();
       const exists = collections.collections.some((c: any) => c.name === this.config.collectionName);
 
       if (!exists) {
-        await this.qdrant.createCollection({
-          collection_name: this.config.collectionName,
-          vectors: {
-            size: this.config.embeddingDimension,
-            distance: 'Cosine'
-          }
-        });
+        await safeExecute(
+          async () => {
+            await this.qdrant!.createCollection({
+              collection_name: this.config.collectionName,
+              vectors: {
+                size: this.config.embeddingDimension,
+                distance: 'Cosine'
+              }
+            });
+          },
+          undefined,
+          { operation: 'createCollection', collection: this.config.collectionName }
+        );
         console.log(`Created Qdrant collection: ${this.config.collectionName}`);
       }
     } catch (error) {
-      console.warn('[ARGUS] Qdrant not available, falling back to local search:', error);
+      const qdrantError = QdrantError.connectionFailed(
+        this.config.qdrantUrl,
+        error instanceof Error ? error : undefined
+      );
+      console.warn(`[ARGUS] ${qdrantError.message}`);
+      handleError(qdrantError, { fallback: 'local_search' });
       this.qdrant = null;
       this.useLocalSearch = true;
       await this.loadLocalIndex();
@@ -190,9 +234,9 @@ export class RAGEngine {
       const embedding = await generateEmbedding(text, this.embeddingOptions);
 
       // Store in SQLite with embedding
-      this.storage.storeTransaction(tx, embedding);
+      await this.storage.storeTransaction(tx, embedding);
 
-      // Index in local search
+      // Index in local search (always succeeds, no retry needed)
       this.localSearch.index({
         id: tx.id,
         content: text,
@@ -205,29 +249,39 @@ export class RAGEngine {
         timestamp: tx.timestamp
       });
 
-      // If Qdrant is available, index there too
+      // If Qdrant is available, index there too with retry
       if (this.qdrant && !this.useLocalSearch) {
-        await this.qdrant.upsert(this.config.collectionName, {
-          points: [
-            {
-              id: tx.id,
-              vector: Array.from(embedding),
-              payload: {
-                timestamp: tx.timestamp,
-                sessionId: tx.sessionId,
-                promptRaw: tx.prompt.raw,
-                resultOutput: tx.result.output,
-                category: tx.metadata.category,
-                tags: tx.metadata.tags
-              }
-            }
-          ]
-        });
+        await safeExecute(
+          async () => {
+            await this.qdrant!.upsert(this.config.collectionName, {
+              points: [
+                {
+                  id: tx.id,
+                  vector: Array.from(embedding),
+                  payload: {
+                    timestamp: tx.timestamp,
+                    sessionId: tx.sessionId,
+                    promptRaw: tx.prompt.raw,
+                    resultOutput: tx.result.output,
+                    category: tx.metadata.category,
+                    tags: tx.metadata.tags
+                  }
+                }
+              ]
+            });
+          },
+          undefined,
+          { operation: 'upsert', id: tx.id }
+        );
       }
 
       return true;
     } catch (error) {
-      console.error('Failed to index transaction:', error);
+      const indexError = QdrantError.indexFailed(
+        tx.id,
+        error instanceof Error ? error : undefined
+      );
+      await handleError(indexError, { transactionId: tx.id });
       return false;
     }
   }
@@ -293,12 +347,26 @@ export class RAGEngine {
       const embedding = await generateEmbedding(query.query, this.embeddingOptions);
 
       if (this.qdrant && !this.useLocalSearch) {
-        // Use Qdrant for fast vector search
-        const results = await this.qdrant.search(this.config.collectionName, {
-          vector: Array.from(embedding),
-          limit: limit * 2, // Get more to filter
-          score_threshold: query.threshold || 0.7
-        });
+        // Use Qdrant for fast vector search with retry
+        const results = await safeExecuteWithRetry(
+          async () => {
+            return await this.qdrant!.search(this.config.collectionName, {
+              vector: Array.from(embedding),
+              limit: limit * 2, // Get more to filter
+              score_threshold: query.threshold || 0.7
+            });
+          },
+          undefined,
+          {
+            maxAttempts: 2,
+            initialDelay: 500,
+            context: { operation: 'search', query: query.query.substring(0, 50) }
+          }
+        );
+
+        if (!results) {
+          throw QdrantError.searchFailed(query.query);
+        }
 
         // Separate hooks and transactions
         const hooks: Hook[] = [];
@@ -306,10 +374,10 @@ export class RAGEngine {
 
         for (const result of results) {
           if (result.payload?.type === 'hook') {
-            const hook = this.storage.getHook(result.payload.hookId);
+            const hook = await this.storage.getHook(result.payload.hookId);
             if (hook) hooks.push(hook);
           } else {
-            const tx = this.storage.getTransaction(result.id);
+            const tx = await this.storage.getTransaction(result.id);
             if (tx) relevantTransactions.push(tx);
           }
         }
@@ -347,7 +415,11 @@ export class RAGEngine {
         };
       }
     } catch (error) {
-      console.error('Search failed:', error);
+      const searchError = QdrantError.searchFailed(
+        query.query,
+        error instanceof Error ? error : undefined
+      );
+      await handleError(searchError, { fallback: 'local_text_search' });
 
       // Final fallback to text search
       const transactions = await this.storage.searchTransactions(query.query, limit);

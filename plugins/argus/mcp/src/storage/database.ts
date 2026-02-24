@@ -9,6 +9,13 @@ import { Transaction, Hook } from '../types/index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import {
+  DatabaseError,
+  FileSystemError,
+  handleError,
+  safeExecute,
+  safeExecuteWithRetry
+} from '../errors/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +30,16 @@ export class Storage {
 
   constructor(dbPath?: string) {
     const dataDir = dbPath || path.join(process.env.HOME || process.env.USERPROFILE || '.', '.argus');
-    fs.mkdirSync(dataDir, { recursive: true });
+
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+    } catch (error) {
+      throw FileSystemError.directoryFailed(
+        dataDir,
+        'create',
+        error instanceof Error ? error : undefined
+      );
+    }
 
     this.dbPath = path.join(dataDir, 'argus.db');
     this.initPromise = this.initialize();
@@ -32,16 +48,39 @@ export class Storage {
   }
 
   private async initialize(): Promise<void> {
-    // Initialize sql.js
-    this.SQL = await initSqlJs({
-      // Locate wasm file relative to this module
-      locateFile: (file) => {
-        // Try to find the wasm file in node_modules/sql.js/dist
-        const wasmPath = path.join(__dirname, '../node_modules/sql.js/dist', file);
-        // Fallback to relative path
-        return wasmPath;
+    try {
+      // Initialize sql.js with retry
+      this.SQL = await safeExecuteWithRetry(
+        async () => {
+          return await initSqlJs({
+            // Locate wasm file relative to this module
+            locateFile: (file) => {
+              // Try to find the wasm file in node_modules/sql.js/dist
+              const wasmPath = path.join(__dirname, '../node_modules/sql.js/dist', file);
+              // Fallback to relative path
+              return wasmPath;
+            }
+          });
+        },
+        undefined,
+        {
+          maxAttempts: 2,
+          initialDelay: 500,
+          context: { operation: 'init_sqljs' }
+        }
+      );
+
+      if (!this.SQL) {
+        throw DatabaseError.initFailed(this.dbPath);
       }
-    });
+    } catch (error) {
+      const initError = DatabaseError.initFailed(
+        this.dbPath,
+        error instanceof Error ? error : undefined
+      );
+      handleError(initError);
+      throw initError;
+    }
 
     // Load existing database or create new one
     if (fs.existsSync(this.dbPath)) {
@@ -80,14 +119,32 @@ export class Storage {
 
       // Write to temporary file first (atomic write)
       const tmpPath = this.dbPath + '.tmp';
-      fs.writeFileSync(tmpPath, buffer);
+
+      try {
+        fs.writeFileSync(tmpPath, buffer);
+      } catch (error) {
+        throw FileSystemError.permissionDenied(
+          tmpPath,
+          'write',
+          error instanceof Error ? error : undefined
+        );
+      }
 
       // Rename to actual path (atomic operation on most filesystems)
-      fs.renameSync(tmpPath, this.dbPath);
+      try {
+        fs.renameSync(tmpPath, this.dbPath);
+      } catch (error) {
+        throw DatabaseError.saveFailed(
+          this.dbPath,
+          error instanceof Error ? error : undefined
+        );
+      }
 
       console.debug(`[ARGUS] Database saved to ${this.dbPath} (${buffer.length} bytes)`);
     } catch (error) {
-      console.error('[ARGUS] Failed to save database:', error);
+      if (error instanceof FileSystemError || error instanceof DatabaseError) {
+        handleError(error);
+      }
       throw error;
     }
   }
@@ -166,6 +223,22 @@ export class Storage {
 
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_indexed_files_path ON indexed_files(path)`);
 
+    // Track hook executions (not marketplace hooks, but actual hook runs)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS hook_executions (
+        id TEXT PRIMARY KEY,
+        hook_name TEXT NOT NULL,
+        hook_type TEXT NOT NULL,
+        executed_at INTEGER NOT NULL,
+        session_id TEXT NOT NULL,
+        success INTEGER DEFAULT 1,
+        duration_ms INTEGER
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_hook_executions_type ON hook_executions(hook_type)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_hook_executions_session ON hook_executions(session_id)`);
+
     this.saveToFile();
   }
 
@@ -175,7 +248,7 @@ export class Storage {
   async storeTransaction(tx: Transaction, embedding?: Float32Array): Promise<boolean> {
     try {
       await this.ensureInitialized();
-      if (!this.db) throw new Error('Database not initialized');
+      if (!this.db) throw DatabaseError.transactionFailed('store', tx.id);
 
       // Helper to convert undefined to null
       const toNull = (value: any): any => value === undefined ? null : value;
@@ -216,7 +289,12 @@ export class Storage {
       this.saveToFile();
       return true;
     } catch (error) {
-      console.error('Failed to store transaction:', error);
+      const storeError = DatabaseError.transactionFailed(
+        'store',
+        tx.id,
+        error instanceof Error ? error : undefined
+      );
+      await handleError(storeError, { transactionId: tx.id });
       return false;
     }
   }
@@ -355,6 +433,30 @@ export class Storage {
       return true;
     } catch (error) {
       console.error('Failed to delete transaction:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Record a hook execution (for tracking hook counts in stats)
+   */
+  async recordHookExecution(hookName: string, hookType: string, sessionId: string, durationMs?: number): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+      if (!this.db) throw new Error('Database not initialized');
+
+      const id = `${hookType}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      this.db.run(`
+        INSERT INTO hook_executions (id, hook_name, hook_type, executed_at, session_id, success, duration_ms)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+      `, [id, hookName, hookType, Date.now(), sessionId, durationMs || null]);
+
+      this.pendingChanges = true;
+      this.saveToFile();
+      return true;
+    } catch (error) {
+      console.error('Failed to record hook execution:', error);
       return false;
     }
   }
@@ -534,6 +636,13 @@ export class Storage {
   }
 
   /**
+   * Index a file (alias for storeIndexedFile with simpler interface)
+   */
+  async indexFile(file: { path: string; hash: string; size: number; indexedAt: number }): Promise<void> {
+    await this.storeIndexedFile(file.path, file.hash, file.size, 0);
+  }
+
+  /**
    * Get statistics summary for the web dashboard
    */
   async getStats(): Promise<{
@@ -566,10 +675,10 @@ export class Storage {
       // Ignore error
     }
 
-    // Get hook count
+    // Get hook execution count (actual runs, not marketplace hooks)
     let hookCount = 0;
     try {
-      const hookStmt = this.db.prepare(`SELECT COUNT(*) as count FROM hooks`);
+      const hookStmt = this.db.prepare(`SELECT COUNT(*) as count FROM hook_executions`);
       if (hookStmt.step()) {
         hookCount = hookStmt.getAsObject({ count: 0 }).count as number;
       }
@@ -617,6 +726,10 @@ export class Storage {
         lastUpdated: Date.now()
       };
       fs.writeFileSync(statsPath, JSON.stringify(statsData, null, 2));
+
+      // Also export recent transactions for web dashboard
+      // Export the most recent 1000 transactions
+      await this.exportTransactionsToJson(1000, 0);
     } catch (e) {
       console.warn('[ARGUS] Failed to write stats file:', e);
     }
@@ -628,6 +741,57 @@ export class Storage {
       memorySize,
       lastIndexTime
     };
+  }
+
+  /**
+   * Export transactions to JSON file for web dashboard
+   */
+  async exportTransactionsToJson(limit: number = 1000, offset: number = 0): Promise<void> {
+    await this.ensureInitialized();
+    if (!this.db) return;
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM transactions
+        ORDER BY timestamp DESC
+        LIMIT ? OFFSET ?
+      `);
+      stmt.bind([limit, offset]);
+
+      const transactions: any[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject<any>();
+        // Convert to web dashboard format
+        transactions.push({
+          id: row.id,
+          timestamp: row.timestamp,
+          sessionId: row.session_id,
+          prompt: row.prompt_raw,
+          promptType: row.prompt_type,
+          response: row.result_output,
+          success: row.result_success === 1,
+          duration: row.result_duration,
+          category: row.metadata_category,
+          tags: row.metadata_tags ? JSON.parse(row.metadata_tags) : [],
+          toolName: row.metadata_tags ? JSON.parse(row.metadata_tags)[0] : 'unknown',
+          isFileEdit: row.metadata_category === 'file_modification',
+          git: null // TODO: Add git context if stored
+        });
+      }
+      stmt.free();
+
+      // Write to transactions.json for web dashboard
+      const exportPath = path.join(path.dirname(this.dbPath), 'transactions.json');
+      fs.writeFileSync(exportPath, JSON.stringify({
+        transactions,
+        total: transactions.length,
+        lastUpdated: Date.now()
+      }, null, 2));
+
+      console.log(`[ARGUS] Exported ${transactions.length} transactions to ${exportPath}`);
+    } catch (e) {
+      console.error('[ARGUS] Failed to export transactions:', e);
+    }
   }
 
   /**

@@ -13,6 +13,9 @@
 
 const path = require('path');
 const fs = require('fs');
+const { recordHookExecution } = require('./utils');
+
+const STOP_START_TIME = Date.now();
 const os = require('os');
 
 // Queue paths
@@ -328,7 +331,11 @@ process.on('beforeExit', async () => {
 // Main execution
 stop().catch(error => {
   console.error('[ARGUS] Fatal error during stop:', error);
+  const duration = Date.now() - STOP_START_TIME;
+  recordHookExecution('stop', 'Stop', process.cwd(), duration);
   process.exit(1);
 }).then(() => {
+  const duration = Date.now() - STOP_START_TIME;
+  recordHookExecution('stop', 'Stop', process.cwd(), duration);
   process.exit(0);
 });
