@@ -6,13 +6,15 @@
  * Captures tool results and queues them for ARGUS memory processing.
  */
 
-const { queueTransaction } = require('./utils');
+const { queueTransaction, recordHookExecution } = require('./utils');
 const {
   getEnhancedSummary,
   trackFileModification,
   trackCommand,
   loadContext
 } = require('./context-tracker');
+
+const HOOK_START_TIME = Date.now();
 const {
   getChangePreviewWithGit,
   isGitRepository,
@@ -304,9 +306,13 @@ async function postToolUse(toolName, args, result) {
     }
 
     await postToolUse(toolName, args, result);
+    const duration = Date.now() - HOOK_START_TIME;
+    recordHookExecution('post-tool-use', 'PostToolUse', process.cwd(), duration);
     process.exit(0);
   } catch (error) {
     console.error('[ARGUS] Error in post-tool-use hook:', error.message);
+    const duration = Date.now() - HOOK_START_TIME;
+    recordHookExecution('post-tool-use', 'PostToolUse', process.cwd(), duration);
     process.exit(0); // Don't fail the hook
   }
 })();

@@ -12,6 +12,8 @@ const QUEUE_DIR = path.join(ARGUS_HOME, 'queue');
 const EDIT_QUEUE_PATH = path.join(QUEUE_DIR, 'edits.jsonl');
 const TRANSACTION_QUEUE_PATH = path.join(QUEUE_DIR, 'transactions.jsonl');
 const PROMPT_QUEUE_PATH = path.join(QUEUE_DIR, 'prompts.jsonl');
+const HOOK_EXECUTIONS_PATH = path.join(ARGUS_HOME, 'hook_executions.jsonl');
+const INDEXED_FILES_PATH = path.join(ARGUS_HOME, 'indexed_files.jsonl');
 
 // Session state file path (with fallback)
 const SESSION_STATE_PATH = process.env.CLAUDE_PLUGIN_ROOT
@@ -126,6 +128,44 @@ function queuePrompt(promptData) {
 }
 
 /**
+ * Record a hook execution for tracking
+ */
+function recordHookExecution(hookName, hookType, sessionId, durationMs) {
+  try {
+    const entry = JSON.stringify({
+      hook_name: hookName,
+      hook_type: hookType,
+      executed_at: Date.now(),
+      session_id: sessionId || process.cwd(),
+      duration_ms: durationMs
+    });
+    fs.appendFileSync(HOOK_EXECUTIONS_PATH, entry + '\n');
+    console.log(`[ARGUS] ✓ Recorded hook execution: ${hookType}`);
+  } catch (error) {
+    console.error('[ARGUS] Failed to record hook execution:', error.message);
+  }
+}
+
+/**
+ * Queue indexed files for database insertion
+ */
+function queueIndexedFiles(files, projectDir, indexType) {
+  try {
+    const entry = JSON.stringify({
+      type: 'indexed_files',
+      project_dir: projectDir,
+      index_type: indexType, // 'full' or 'incremental'
+      files: files,
+      timestamp: Date.now()
+    });
+    fs.appendFileSync(INDEXED_FILES_PATH, entry + '\n');
+    console.log(`[ARGUS] ✓ Queued ${files.length} indexed files for database`);
+  } catch (error) {
+    console.error('[ARGUS] Failed to queue indexed files:', error.message);
+  }
+}
+
+/**
  * Load session state from disk
  */
 function loadSessionState() {
@@ -229,6 +269,8 @@ module.exports = {
   queueEdit,
   queueTransaction,
   queuePrompt,
+  recordHookExecution,
+  queueIndexedFiles,
   readQueue,
   clearQueue,
   ensureQueueDir,
@@ -236,5 +278,7 @@ module.exports = {
   EDIT_QUEUE_PATH,
   TRANSACTION_QUEUE_PATH,
   PROMPT_QUEUE_PATH,
+  HOOK_EXECUTIONS_PATH,
+  INDEXED_FILES_PATH,
   QUEUE_DIR,
 };

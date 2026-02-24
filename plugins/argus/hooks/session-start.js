@@ -9,6 +9,10 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
+const { recordHookExecution, queueIndexedFiles } = require('./utils');
+
+// Track execution time
+const SESSION_START_TIME = Date.now();
 
 /**
  * Check if a port is in use (LISTEN state only, not TIME_WAIT)
@@ -489,22 +493,27 @@ async function autoIndexProject(projectDir, pluginRoot) {
 
   const lastIndexed = getLastIndexTime(projectDir);
   const now = Date.now();
-  const INDEX_THRESHOLD = 3 * 60 * 60 * 1000; // 3 hours (au lieu de 24h)
+  const INDEX_THRESHOLD = 3 * 60 * 60 * 1000; // 3 hours
 
   // Check if we should re-index
   const shouldIndex = lastIndexed === 0 || (now - lastIndexed) > INDEX_THRESHOLD;
 
   if (!shouldIndex) {
     const hoursSinceIndex = Math.floor((now - lastIndexed) / (60 * 60 * 1000));
-    console.log(`[ARGUS] ℹ Project indexed ${hoursSinceIndex}h ago, skipping (threshold: 24h)`);
+    console.log(`[ARGUS] ℹ Project indexed ${hoursSinceIndex}h ago, skipping (threshold: 3h)`);
     return;
   }
 
   // Perform indexing
-  console.log(`[ARGUS] → Auto-indexing project: ${path.basename(projectDir)}`);
+  const hoursSinceIndex = Math.floor((now - lastIndexed) / (60 * 60 * 1000));
+  if (lastIndexed > 0 && hoursSinceIndex > 3) {
+    console.log(`[ARGUS] → Project indexed ${hoursSinceIndex}h ago (> 3h), re-indexing fully: ${path.basename(projectDir)}`);
+  } else {
+    console.log(`[ARGUS] → Auto-indexing project: ${path.basename(projectDir)}`);
+  }
 
-  // Use incremental index if previously indexed, full index if new
-  const useIncremental = lastIndexed > 0;
+  // Use incremental index only if recently indexed (< 3h ago), full index if old or new
+  const useIncremental = lastIndexed > 0 && (now - lastIndexed) <= INDEX_THRESHOLD;
 
   // Actually perform the indexing by walking the directory
   try {
@@ -553,6 +562,10 @@ async function autoIndexProject(projectDir, pluginRoot) {
     };
 
     updateIndexInfo(projectDir, stats);
+
+    // Queue indexed files for database insertion
+    queueIndexedFiles(indexedFiles, projectDir, useIncremental ? 'incremental' : 'full');
+
     console.log(`[ARGUS] ✓ Indexed ${indexedFiles.length} files in ${path.basename(projectDir)}`);
     console.log(`[ARGUS] ℹ To manually re-index, use: argus__index_codebase`);
   } catch (error) {
@@ -564,6 +577,10 @@ sessionStart().catch(error => {
   console.error('[ARGUS] Fatal error during session start:', error);
   process.exit(1);
 }).then(() => {
+  // Record hook execution
+  const duration = Date.now() - SESSION_START_TIME;
+  recordHookExecution('session-start', 'SessionStart', process.cwd(), duration);
+
   // Ensure clean exit
   process.exit(0);
 });

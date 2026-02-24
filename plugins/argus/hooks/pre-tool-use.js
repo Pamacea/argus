@@ -7,12 +7,14 @@
  * the agent to consult ARGUS (via argus__check_hooks) before execution.
  */
 
+const { recordHookExecution } = require('./utils');
 const EXPLORE_TOOLS = ['explore', 'create_team', 'Task'];
 const ARGUS_TOOLS = ['argus__check_hooks', 'argus__save_transaction', 'argus__search_memory'];
 
 // Track if argus has been consulted in current session
 let lastConsultation = null;
 const CONSULTATION_TTL = 5 * 60 * 1000; // 5 minutes
+const HOOK_START_TIME = Date.now();
 
 function shouldEnforceArgus(toolName) {
   // Check if this is an Explore/CreateTeam command
@@ -139,13 +141,20 @@ This ensures you don't duplicate work and follow established patterns.
     if (result) {
       // Block execution - output to stderr for Claude to see
       console.error(result);
+      // Record hook execution before blocking
+      const duration = Date.now() - HOOK_START_TIME;
+      recordHookExecution('pre-tool-use', 'PreToolUse', process.cwd(), duration);
       process.exit(1); // Non-zero exit blocks the tool
     } else {
       // Allow execution
+      const duration = Date.now() - HOOK_START_TIME;
+      recordHookExecution('pre-tool-use', 'PreToolUse', process.cwd(), duration);
       process.exit(0);
     }
   } catch (error) {
     console.error('[ARGUS] Error in pre-tool-use hook:', error.message);
+    const duration = Date.now() - HOOK_START_TIME;
+    recordHookExecution('pre-tool-use', 'PreToolUse', process.cwd(), duration);
     process.exit(0); // Don't block on error
   }
 })();

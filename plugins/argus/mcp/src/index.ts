@@ -21,6 +21,8 @@ import {
   handleGetStats,
 } from './handlers/tools.js';
 import { getQueueProcessor } from './queue-processor.js';
+import { startHookExecutionProcessor } from './processors/hook-executions.js';
+import { startIndexedFilesProcessor } from './processors/indexed-files.js';
 
 // Create MCP server
 const server = new Server(
@@ -404,6 +406,14 @@ async function main() {
   const queueProcessor = getQueueProcessor();
   queueProcessor.start(5000); // Process every 5 seconds
   console.error('[ARGUS] Queue processor started');
+
+  // Start hook executions processor to track hook runs
+  startHookExecutionProcessor(10000); // Process every 10 seconds
+  console.error('[ARGUS] Hook executions processor started');
+
+  // Start indexed files processor to track indexed files
+  startIndexedFilesProcessor(15000); // Process every 15 seconds
+  console.error('[ARGUS] Indexed files processor started');
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
