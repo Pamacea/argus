@@ -246,11 +246,35 @@ async function handleRequest(req, res) {
   // Stats endpoint - get ARGUS statistics
   if (url.pathname === '/api/stats' && req.method === 'GET') {
     try {
-      // Calculate stats from actual data
+      // Try to read stats from the stats.json file written by the MCP server
+      // This is the most reliable source as it reads from SQLite
+      try {
+        const { existsSync, readFileSync } = await import('fs');
+        const statsPath = join(DATA_DIR, 'stats.json');
+
+        if (existsSync(statsPath)) {
+          const statsContent = readFileSync(statsPath, 'utf-8');
+          const statsData = JSON.parse(statsContent);
+
+          // Add usingQdrant flag
+          statsData.usingQdrant = false; // TODO: detect if Qdrant is running
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            stats: statsData
+          }, null, 2));
+          return;
+        }
+      } catch (e) {
+        console.warn('[ARGUS Web] Could not read stats.json, falling back to manual calculation:', e.message);
+      }
+
+      // Fallback: Calculate stats manually
       const stats = {
-        usingQdrant: false, // TODO: detect if Qdrant is running
+        usingQdrant: false,
         transactionCount: 0,
-        hookCount: 0,
+        hookCount: 4, // SessionStart, PreToolUse, PostToolUse, Stop
         indexedFileCount: 0,
         memorySize: 0,
         lastIndexTime: 0
@@ -282,39 +306,37 @@ async function handleRequest(req, res) {
         console.error('[ARGUS Web] Error counting indexed files:', e.message);
       }
 
-      // Get database size and count transactions from DATABASE (not queue!)
+      // Get database size and count transactions
+      // FIX: Read from queue directory where hooks actually write
       try {
         const fsPromises = await import('fs/promises');
         const { existsSync, readFileSync } = await import('fs');
 
-        // Get database size
+        // Get database size (SQLite file)
         const dbPath = join(DATA_DIR, 'argus.db');
         const dbStat = await fsPromises.stat(dbPath).catch(() => null);
         stats.memorySize = dbStat?.size || 0;
 
-        // Count transactions from the MAIN database file
-        // CRITICAL: Count from permanent storage, not temporary queue
-        const transactionLog = join(DATA_DIR, 'transactions.jsonl');
-        if (existsSync(transactionLog)) {
-          const content = readFileSync(transactionLog, 'utf-8');
+        // CRITICAL FIX: Read from queue directory (where hooks write)
+        // The queue contains the most recent transactions
+        const queueDir = join(DATA_DIR, 'queue');
+        const queuePath = join(queueDir, 'transactions.jsonl');
+        if (existsSync(queuePath)) {
+          const content = readFileSync(queuePath, 'utf-8');
           const lines = content.trim().split('\n').filter(l => l);
           stats.transactionCount = lines.length;
         }
 
-        // Optionally count queued transactions separately (for debugging)
-        const queueDir = join(DATA_DIR, 'queue');
-        const newQueuePath = join(queueDir, 'transactions.jsonl');
-        if (existsSync(newQueuePath)) {
-          const content = readFileSync(newQueuePath, 'utf-8');
+        // Fallback: Check old location for backward compatibility
+        const oldTransactionLog = join(DATA_DIR, 'transactions.jsonl');
+        if (existsSync(oldTransactionLog) && stats.transactionCount === 0) {
+          const content = readFileSync(oldTransactionLog, 'utf-8');
           const lines = content.trim().split('\n').filter(l => l);
-          stats.queuedTransactions = lines.length; // Separate metric
+          stats.transactionCount = lines.length;
         }
       } catch (e) {
         console.error('[ARGUS Web] Error reading database:', e.message);
       }
-
-      // Hook count is fixed for now
-      stats.hookCount = 4; // SessionStart, PreToolUse, PostToolUse, Stop
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -399,83 +421,47 @@ async function handleRequest(req, res) {
       const limit = parseInt(urlParams.get('limit')) || 50;
       const offset = parseInt(urlParams.get('offset')) || 0;
 
-      // Read from transaction DATABASE (not queue!)
-      // CRITICAL: The queue is temporary storage, the database is permanent
-      import('fs').then(({ readdirSync, readFileSync, existsSync }) => {
-        const transactions = [];
-        // Read from the MAIN database file, not the queue
-        const transactionLog = join(DATA_DIR, 'transactions.jsonl');
+      // CRITICAL FIX: Read from transactions.json (exported from SQLite by MCP server)
+      // This is the reliable source containing actual database transactions
+      import('fs').then(({ readFileSync, existsSync }) => {
+        const transactionsPath = join(DATA_DIR, 'transactions.json');
 
-        if (existsSync(transactionLog)) {
+        if (existsSync(transactionsPath)) {
           try {
-            const content = readFileSync(transactionLog, 'utf-8');
-            const lines = content.trim().split('\n').filter(l => l);
+            const content = readFileSync(transactionsPath, 'utf-8');
+            const data = JSON.parse(content);
+            const allTransactions = data.transactions || [];
 
-            // Parse all transactions
-            for (const line of lines) {
-              try {
-                const data = JSON.parse(line);
-                // Convert queue format to transaction format
-                const prompt = data.prompt || 'No prompt';
-                const response = data.result?.output || '';
-                const category = data.metadata?.category || 'general';
-                const tags = data.metadata?.tags || [];
+            // Apply pagination
+            const total = allTransactions.length;
+            const paginated = allTransactions.slice(offset, offset + limit);
 
-                // Create more readable prompt
-                let readablePrompt = prompt;
-                if (prompt.includes(' called')) {
-                  // Extract tool name and arguments
-                  readablePrompt = prompt.replace(' called', '');
-                }
-
-                // Format response for better display
-                let formattedResponse = response;
-                if (response && response.length > 200) {
-                  formattedResponse = response.substring(0, 200) + '...';
-                }
-
-                transactions.push({
-                  id: data.id || `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                  timestamp: data.timestamp || Date.now(),
-                  sessionId: data.context?.cwd || 'unknown',
-                  prompt: readablePrompt,
-                  promptType: data.promptType || 'tool',
-                  response: formattedResponse,
-                  success: data.result?.success ?? true,
-                  duration: data.result?.duration || 0,
-                  category: category,
-                  tags: tags,
-                  // Add extra context for display
-                  toolName: tags[0] || 'unknown',
-                  isFileEdit: category === 'file_modification',
-                  // Include change preview for file modifications
-                  changePreview: data.result?.changePreview || null,
-                  // Include git context
-                  git: data.context?.git || data.metadata?.git || null
-                });
-              } catch (e) {
-                // Skip malformed lines
-              }
-            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              success: true,
+              transactions: paginated,
+              total,
+              limit,
+              offset,
+              lastUpdated: data.lastUpdated || Date.now()
+            }, null, 2));
+            return;
           } catch (e) {
-            console.error('[ARGUS Web] Error reading transaction log:', e);
+            console.error('[ARGUS Web] Error reading transactions.json:', e);
           }
         }
 
-        // Sort by timestamp descending
-        transactions.sort((a, b) => b.timestamp - a.timestamp);
-
-        // Apply pagination
-        const total = transactions.length;
-        const paginated = transactions.slice(offset, offset + limit);
-
+        // Fallback: Return empty result if file doesn't exist
+        // This can happen if MCP server hasn't exported yet
+        console.warn('[ARGUS Web] transactions.json not found. MCP server may not have exported data yet.');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: true,
-          transactions: paginated,
-          total,
+          transactions: [],
+          total: 0,
           limit,
-          offset
+          offset,
+          message: 'No transactions available yet. Waiting for MCP server to export data.'
         }, null, 2));
       }).catch(error => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
