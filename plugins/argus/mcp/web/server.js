@@ -282,41 +282,35 @@ async function handleRequest(req, res) {
         console.error('[ARGUS Web] Error counting indexed files:', e.message);
       }
 
-      // Get database size
+      // Get database size and count transactions from DATABASE (not queue!)
       try {
         const fsPromises = await import('fs/promises');
+        const { existsSync, readFileSync } = await import('fs');
+
+        // Get database size
         const dbPath = join(DATA_DIR, 'argus.db');
-        const dbStat = await fsPromises.stat(dbPath);
-        stats.memorySize = dbStat.size;
-      } catch (e) {
-        // Database might not exist
-        console.error('[ARGUS Web] Error getting database size:', e.message);
-      }
+        const dbStat = await fsPromises.stat(dbPath).catch(() => null);
+        stats.memorySize = dbStat?.size || 0;
 
-      // Count transactions from queue files
-      try {
+        // Count transactions from the MAIN database file
+        // CRITICAL: Count from permanent storage, not temporary queue
+        const transactionLog = join(DATA_DIR, 'transactions.jsonl');
+        if (existsSync(transactionLog)) {
+          const content = readFileSync(transactionLog, 'utf-8');
+          const lines = content.trim().split('\n').filter(l => l);
+          stats.transactionCount = lines.length;
+        }
+
+        // Optionally count queued transactions separately (for debugging)
         const queueDir = join(DATA_DIR, 'queue');
-
-        // Check new JSONL format
         const newQueuePath = join(queueDir, 'transactions.jsonl');
         if (existsSync(newQueuePath)) {
           const content = readFileSync(newQueuePath, 'utf-8');
           const lines = content.trim().split('\n').filter(l => l);
-          stats.transactionCount += lines.length;
-        }
-
-        // Check old JSON format
-        const oldQueuePath = join(queueDir, 'transactions.json');
-        if (existsSync(oldQueuePath)) {
-          const content = readFileSync(oldQueuePath, 'utf-8');
-          // For large JSON files, count objects by looking for patterns
-          const matches = content.match(/"promptType"/g);
-          if (matches) {
-            stats.transactionCount += matches.length;
-          }
+          stats.queuedTransactions = lines.length; // Separate metric
         }
       } catch (e) {
-        console.error('[ARGUS Web] Error counting transactions:', e.message);
+        console.error('[ARGUS Web] Error reading database:', e.message);
       }
 
       // Hook count is fixed for now
@@ -405,11 +399,12 @@ async function handleRequest(req, res) {
       const limit = parseInt(urlParams.get('limit')) || 50;
       const offset = parseInt(urlParams.get('offset')) || 0;
 
-      // Read from transaction log files
+      // Read from transaction DATABASE (not queue!)
+      // CRITICAL: The queue is temporary storage, the database is permanent
       import('fs').then(({ readdirSync, readFileSync, existsSync }) => {
         const transactions = [];
-        const logDir = join(DATA_DIR, 'queue');
-        const transactionLog = join(logDir, 'transactions.jsonl');
+        // Read from the MAIN database file, not the queue
+        const transactionLog = join(DATA_DIR, 'transactions.jsonl');
 
         if (existsSync(transactionLog)) {
           try {

@@ -133,12 +133,16 @@ export class QueueProcessor {
   /**
    * Stop processing queues
    */
-  stop() {
+  async stop() {
     if (this.processingInterval) {
       clearInterval(this.processingInterval);
       this.processingInterval = null;
-      console.log('[ARGUS Queue] Processor stopped');
     }
+
+    // Process any remaining items before stopping
+    console.log('[ARGUS Queue] Processing remaining items before shutdown...');
+    await this.processAllQueues();
+    console.log('[ARGUS Queue] Processor stopped');
   }
 
   /**

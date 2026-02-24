@@ -1,6 +1,6 @@
 {
   "name": "argus-plugin",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "description": "ARGUS - Sentinelle omnisciente pour Claude Code",
   "author": "Oalacea",
   "repository": "https://github.com/Pamacea/argus",

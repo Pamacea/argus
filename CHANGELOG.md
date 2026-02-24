@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.12] - 2026-02-24
+
+### 🐛 Bug Fixes
+
+#### Critical Transaction Persistence & Dashboard Fix
+- **Fixed: Dashboard Reading Wrong Data Source** - Dashboard was reading from queue (temporary) instead of database (permanent)
+- **Fixed: Transactions Disappearing from UI** - Transactions are now properly persisted and visible across sessions
+- **Fixed: Queue Not Processed on Shutdown** - Stop hook now flushes all queued transactions before exit
+- **Fixed: Double-Counting Transactions** - Stats now count from database only, not queue + database
+
+#### Stop Hook Enhancement
+- **Queue Processing on Shutdown** - Processes all queued transactions before exit
+- **Database Integrity Verification** - Validates database structure after flush
+- **Session Statistics** - Shows processed/remaining transaction counts
+- **Signal Handlers** - Handles SIGINT, SIGTERM, beforeExit for graceful shutdown
+- **Atomic Writes** - Prevents data corruption during shutdown
+
+#### MCP Server Shutdown Handling
+- **Graceful Shutdown** - Queue processor flushes remaining items before exit
+- **Signal Handlers** - Properly handles SIGINT, SIGTERM, beforeExit
+- **Queue Processor Enhancement** - `stop()` method now processes remaining queues
+
+#### Dashboard Fixes
+- **Fixed Transaction Source** - Now reads from `~/.argus/transactions.jsonl` (database) instead of `~/.argus/queue/transactions.jsonl` (temporary queue)
+- **Fixed Transaction Count** - Counts from database only, adds separate `queuedTransactions` metric
+- **Fixed History Endpoint** - `/api/transactions` now returns permanent data
+
+### 🔧 Technical Details
+
+**Files Modified:**
+- `plugins/argus/hooks/stop.js` - Enhanced with queue processing and signal handlers
+- `plugins/argus/mcp/src/index.ts` - Added graceful shutdown handlers
+- `plugins/argus/mcp/src/queue-processor.ts` - Enhanced `stop()` to process remaining items
+- `plugins/argus/mcp/web/server.js` - Fixed data sources (database vs queue)
+
+**Before:**
+- Transactions disappeared when queue was processed
+- Dashboard read from temporary queue (wrong!)
+- Transaction count reset to 0 on session restart
+- No queue flush on shutdown
+
+**After:**
+- ✅ Transactions persist permanently in database
+- ✅ Dashboard reads from permanent database (correct!)
+- ✅ Transaction count preserved across sessions
+- ✅ Queue automatically flushed on shutdown
+- ✅ Graceful shutdown with signal handlers
+
+### 📊 Impact
+
+**What Was Broken:**
+1. User performs action → Transaction written to queue
+2. Queue processor saves to database → Queue cleared
+3. Dashboard reads from queue → Shows 0 transactions
+4. User refreshes → Transactions disappear
+
+**What's Fixed:**
+1. User performs action → Transaction written to queue
+2. Queue processor saves to database → Queue cleared
+3. Dashboard reads from database → Shows all transactions ✅
+4. User refreshes → Transactions persist ✅
+5. User quits session → Stop hook flushes queue → All transactions saved ✅
+
+### 🧪 Testing
+
+To verify the fix:
+1. Start Claude Code session
+2. Perform actions (Edit, Read, Bash, etc.)
+3. Check dashboard at `http://localhost:30000`
+4. Note transaction count and Recent Activity
+5. Wait a few seconds (queue processor runs)
+6. Refresh dashboard
+7. **Transactions should still be visible** ✅
+8. Quit session (Ctrl+C)
+9. **Should see "Queue processed: X transactions"** ✅
+10. Restart session
+11. **Transaction count should be preserved** ✅
+
+---
+
 ## [0.5.11] - 2026-02-23
 
 ### 🐛 Bug Fixes

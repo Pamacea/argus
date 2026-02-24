@@ -15,24 +15,6 @@ ARGUS MCP Server provides four core tools for Claude Code:
 
 The MCP server is built and located at `mcp/dist/server.bundle.mjs`.
 
-### Configuration
-
-Add to your Claude Code settings (`settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "argus": {
-      "command": "node",
-      "args": ["C:/Users/Yanis/.claude/plugins/cache/argus/argus/0.5.11/mcp/dist/server.bundle.mjs"],
-      "env": {
-        "ARGUS_PLUGIN_ROOT": "C:/Users/Yanis/.claude/plugins/cache/argus/argus/0.5.11"
-      }
-    }
-  }
-}
-```
-
 ## Usage
 
 ### argus__check_hooks (MANDATORY)

@@ -408,6 +408,31 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('ARGUS MCP Server running on stdio');
+
+  // Setup graceful shutdown handlers
+  const gracefulShutdown = async (signal: string) => {
+    console.error(`[ARGUS] Received ${signal}, shutting down gracefully...`);
+    console.error('[ARGUS] Flushing queue before shutdown...');
+
+    // Stop the queue processor
+    queueProcessor.stop();
+
+    // Process any remaining items in the queue
+    // Give it a moment to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.error('[ARGUS] Queue flushed, exiting...');
+    process.exit(0);
+  };
+
+  // Handle shutdown signals
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('beforeExit', async () => {
+    console.error('[ARGUS] beforeExit triggered, flushing queue...');
+    queueProcessor.stop();
+    await new Promise(resolve => setTimeout(resolve, 500));
+  });
 }
 
 main().catch((error) => {
