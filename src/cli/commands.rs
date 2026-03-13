@@ -423,7 +423,7 @@ pub async fn cmd_install(uninstall: bool) -> Result<()> {
 }
 
 /// Daemon: Start the ARGUS agent
-pub async fn cmd_daemon_start(_background: bool, _foreground: bool) -> Result<()> {
+pub async fn cmd_daemon_start(background: bool, foreground: bool) -> Result<()> {
     #[cfg(feature = "agent")]
     {
         use crate::agent::daemon;

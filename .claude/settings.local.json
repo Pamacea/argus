@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\Yanis\\\\Projects\\\\plugins\\\\argus\" && cargo build --release 2>&1 | tail -5)"
+    ]
+  }
+}
