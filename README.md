@@ -1,132 +1,387 @@
-# ARGUS Marketplace
+# ARGUS - Omniscient Memory Sentinel for Claude Code
 
-> **v0.5.11** - Sentinelle omnisciente pour Claude Code - Force l'IA à consulter le contexte avant toute action avec résumés intelligents, intégration Git et persistance garantie.
-
-## 📦 Plugins
-
-### ARGUS
-
-Le plugin ARGUS transforme l'IA d'un simple "exécuteur" en un collaborateur averti qui **JAMAIS** n'agit sans avoir vérifié :
-- ✅ Mémoire des prompts précédents
-- ✅ Recherche sémantique locale (TF-IDF) ou vectorielle (Qdrant)
-- ✅ Index automatique complet des fichiers (racine du projet)
-- ✅ Historique des conversations (style Claude-mem)
-- ✅ Documentation du projet
-- ✅ Visualisation des projets indexés
-- ✅ **NOUVEAU** : Intégration Git pour suivi exact des modifications
-- ✅ **NOUVEAU** : Dashboard redesign avec sidebar navigation
-
-## 🆕 v0.5.11 Nouveautés
-
-### 🐛 Fix Critique : Persistance des Transactions
-- **Problème résolu** : Les transactions ne sont plus perdues entre les sessions
-- **Écritures atomiques** : Utilisation de fichiers temporaires + rename
-- **Auto-flush** : Sauvegarde automatique toutes les 10 secondes
-- **Shutdown hooks** : Sauvegarde forcée à l'arrêt du processus
-- **823+ transactions** : Vérifiées et persistées correctement
-
-### 🔗 Intégration Git (v0.5.10)
-- **Détection automatique** des repositories Git
-- **Suivi des branches** pour chaque transaction
-- **Référence de commit** avec hash, message, auteur et date
-- **Diff preview** (500 caractères) pour les modifications de fichiers
-- **Statut Git** des fichiers (tracked, modified, staged, added, deleted)
-- **Badge Git** dans le feed d'activité pour les repositories suivis
-
-### 📊 Dashboard Amélioré (v0.5.10)
-- **Panneau Git** avec infos repository et dernier commit
-- **Section Diff Preview** avec visualisation des changements
-- **Indicateurs de statut** pour les fichiers modifiés
-- **Tag `git_tracked`** pour les transactions dans des repos Git
-
-## 🆕 v0.5.9 Nouveautés
-
-### 🧠 Résumés Intelligents
-- **Descriptions lisibles** pour chaque action
-- **Suivi du contexte** des tâches
-- **Détection d'intention** automatique
-- **Format "Action (pourquoi)"** pour plus de clarté
-
-## 🆕 v0.5.6 Nouveautés
-
-### 🎨 Dashboard Complètement Repensé
-- **Nouvelle navigation** : Barre latérale avec icônes pour toutes les sections
-- **Design Vercel-inspired** : Palette noir/blanc/gris avec accents bleus subtils
-- **Plus de cartes** : Séparateurs propres et organisation claire
-- **Sections** : Overview, Recent Activity, History/Log, Memory Engine, MCP Tools, Server Endpoints, API Docs
-
-### 🔧 Nouvelles Fonctionnalités
-- **Transaction Search** : Recherchez dans toutes vos transactions
-- **Pagination** : Navigation dans l'historique (10 par page)
-- **Auto-refresh** : Dashboard se rafraîchit toutes les 30 secondes
-- **/api/transactions** : Nouveau endpoint pour l'historique complet
-
-## 🆕 v0.5.5 Nouveautés
-
-### Bug Fixes Critiques
-- **Search Memory** : Corrige le bug `TypeError: allTransactions.map is not a function`
-- **Queue System** : Format JSONL corrigé pour fiabilité maximale
-- **Dashboard Stats** : Affiche maintenant les vraies statistiques de la base
-
-### Nouvelles Fonctionnalités
-- **Queue Processor** : Traite automatiquement les files d'attente toutes les 5 secondes
-- **Prompt/Response Capture** : Historique complet de vos interactions
-- **Transaction Indexing** : Indexation automatique pour la recherche sémantique
-
-## 🆕 v0.5.4 Nouveautés
-
-- **Auto-index amélioré** : Scan depuis la racine du projet, exclut `node_modules`, `.git`, `.next`, etc.
-- **Dashboard détaillé** : Affiche les fichiers indexés avec échantillons
-- **Script autonome** : `scripts/index-project.js` pour indexer manuellement
-- **Multi-projets** : Visualise tous les projets indexés dans le dashboard
-
-## 🚀 Installation
-
-```bash
-# Via Claude Code Marketplace
-/install-plugin argus
-
-# Le MCP server démarre automatiquement
-# Les hooks Claude Code sont activés
-# L'auto-index démarre automatiquement
-```
-
-## 🎯 Utilisation
-
-```
-User: "Explore l'authentification dans ce projet"
-
-Claude: Je dois d'abord consulter ARGUS...
-1. argus__check_hooks("Explore l'authentification")
-2. ARGUS retourne: "3 patterns auth trouvés"
-3. Justification: "Selon ARGUS, ce projet utilise JWT + refresh tokens"
-```
-
-## 📊 Dashboard
-
-Accédez au dashboard : **http://localhost:30000**
-
-- **Indexed Projects** : Tous les projets indexés avec file counts et échantillons
-- **Stats** : Transactions, hooks, storage engine
-- **API** : Documentation complète
-
-## 🔧 Indexation Manuelle
-
-```bash
-# Depuis n'importe quel projet
-node /path/to/argus/plugins/argus/scripts/index-project.js
-```
-
-## 📚 Documentation
-
-Voir [plugins/argus/README.md](./plugins/argus/README.md) pour la documentation complète.
-
-## 🙏 Inspiration
-
-- **Aureus** - Git automation et hooks
-- **Claude-mem** - Memory persistence
-- **Argus** - Le géant aux cent yeux (mythologie grecque)
+**Version:** 0.8.0 | **Language:** Rust | **License:** MIT
 
 ---
 
-**ARGUS Marketplace** - *Rien ne lui échappe.*
+## 🎯 What is ARGUS?
+
+ARGUS is a **CLI-first memory system** for Claude Code that helps you remember past actions, find patterns, and maintain context across development sessions. It replaces the previous MCP plugin with a fast, native Rust CLI that integrates seamlessly with Claude Code via injected rules.
+
+### Key Features
+
+- **🚀 Blazing Fast** - Written in Rust with SQLite backend
+- **🔍 Semantic Search** - Full-text search with FTS5
+- **💾 Persistent Storage** - Local SQLite database in `~/.argus/`
+- **📝 Claude Code Integration** - Auto-injects hooks for seamless workflow
+- **🤖 Background Agent** - Optional daemon for automatic memory capture (via `--features agent`)
+- **🔧 CLI-First** - Simple commands, no complexity
+- **📊 Statistics** - Track your development patterns
+- **🏷️ Tagging System** - Organize transactions with tags and categories
+- **🔌 Cross-Platform IPC** - Named Pipes (Windows) and Unix Sockets (Linux/Mac)
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# From crates.io (package name: argus-tool, binary: argus)
+cargo install argus-tool
+
+# From source
+cargo install --path C:/Users/Yanis/Projects/plugins/argus
+
+# Or build and install manually
+cd C:/Users/Yanis/Projects/plugins/argus
+cargo build --release
+cargo install --path .
+```
+
+### Initialize
+
+```bash
+argus init
+```
+
+This creates:
+- `~/.argus/` - Data directory
+- `~/.argus/memory.db` - SQLite database
+- `~/.claude/rules/argus.md` - Claude Code rules
+
+### Basic Usage
+
+```bash
+# Remember something important
+argus remember "Fixed auth bug in login form" --tags "bugfix,auth"
+
+# Search past transactions
+argus recall "auth"
+
+# List recent transactions
+argus list
+
+# Show statistics
+argus stats
+
+# Show a specific transaction
+argus show 1
+```
+
+---
+
+## 📋 Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `init` | Initialize ARGUS | `argus init` |
+| `remember` | Save a transaction | `argus remember "description" --tags "tag1,tag2"` |
+| `recall` | Search transactions | `argus recall "pattern" --limit 10` |
+| `list` | List transactions | `argus list --limit 20` |
+| `show` | Show details | `argus show <id>` |
+| `stats` | Show statistics | `argus stats` |
+| `index` | Index project | `argus index` |
+| `config` | Configuration | `argus config get/set/list` |
+| `prune` | Delete old transactions | `argus prune --before 30d --dry-run` |
+| `reset` | Reset all data | `argus reset --confirm` |
+| `complete` | Shell completions | `argus complete bash` |
+| `install` | Install/uninstall hooks | `argus install [--uninstall]` |
+| `daemon` | Manage background agent | `argus daemon start|stop|status|ping` |
+
+---
+
+## 🏗️ Architecture
+
+```
+src/
+├── main.rs          # CLI entry point with Clap
+├── lib.rs           # Library exports
+├── common.rs        # Shared utilities
+├── cli/             # CLI layer
+│   ├── commands.rs  # Command implementations
+│   ├── output.rs    # Terminal formatting
+│   └── config.rs    # Configuration
+├── core/            # Business logic
+│   ├── memory.rs    # MemoryEngine (remember/recall)
+│   ├── index.rs     # ProjectIndexer
+│   └── search.rs    # SearchEngine
+└── storage/         # Data layer
+    ├── models.rs    # Data structures
+    ├── db.rs        # SQLite wrapper
+    └── error.rs     # Error types
+```
+
+---
+
+## 📝 Data Models
+
+### Transaction
+```rust
+pub struct Transaction {
+    pub id: Option<i64>,
+    pub prompt: String,
+    pub prompt_type: PromptType,  // User | Tool | System
+    pub context: Context,
+    pub result: TxResult,
+    pub metadata: Option<Metadata>,
+    pub created_at: Option<DateTime<Utc>>,
+}
+```
+
+### Context
+```rust
+pub struct Context {
+    pub cwd: String,
+    pub platform: String,
+    pub session_id: Option<String>,
+    pub project_path: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_commit: Option<String>,
+}
+```
+
+### Metadata
+```rust
+pub struct Metadata {
+    pub tags: Vec<String>,
+    pub category: Option<String>,
+    pub intent: Option<String>,
+    pub summary: Option<String>,
+    // + extra fields
+}
+```
+
+---
+
+## 🔧 Development
+
+### Build
+
+```bash
+cargo build --release
+```
+
+### Test
+
+```bash
+cargo test
+```
+
+### Run
+
+```bash
+./target/release/argus --help
+```
+
+---
+
+## 📊 Statistics Example
+
+```
+📊 ARGUS Statistics
+
+  Transactions: 42
+  Total Size:   12.5 KB
+  Oldest:      2026-03-10 09:30
+  Newest:      2026-03-13 16:45
+
+  By Type:
+    user: 35
+    tool: 7
+```
+
+---
+
+## 🔍 Search Examples
+
+```bash
+# Search for auth-related transactions
+argus recall "auth"
+
+# Search with limit
+argus recall "database" --limit 5
+
+# Full output with context
+argus recall "bug" --full
+```
+
+---
+
+## 🏷️ Tagging
+
+```bash
+# Single tag
+argus remember "Fixed bug" --tags "bugfix"
+
+# Multiple tags
+argus remember "Added feature" --tags "feature,auth"
+
+# With category
+argus remember "Refactored DB" --category "refactor"
+```
+
+---
+
+## 🔌 Claude Code Integration
+
+### Hooks Installation
+
+ARGUS automatically integrates with Claude Code via hooks:
+
+```bash
+# Install hooks (creates plugin in ~/.claude/plugins/cache/)
+argus install
+
+# Uninstall hooks
+argus install --uninstall
+```
+
+Installed hooks:
+- **session-start** - Initializes ARGUS tracking when Claude starts
+- **pre-tool-use** - Searches memory before Explore/CreateTeam actions
+- **post-tool-use** - Automatically saves completed actions
+- **stop** - Persists state when session ends
+
+### Background Agent (Optional)
+
+For automatic memory capture, build with the agent feature:
+
+```bash
+# Install from crates.io with agent support
+cargo install argus-tool --features agent
+
+# Or build with agent support locally
+cargo build --release --features agent
+
+# Start the daemon
+argus daemon start
+
+# Run in foreground (for debugging)
+argus daemon start --foreground
+
+# Check status
+argus daemon status
+
+# Stop the daemon
+argus daemon stop
+
+# Ping the daemon
+argus daemon ping
+```
+
+The agent uses cross-platform IPC:
+- **Windows**: Named Pipes (`\\.\pipe\argus-ipc`)
+- **Linux/macOS**: Unix Sockets (`~/.argus/argus.sock`)
+
+---
+
+## 🗑️ Maintenance
+
+### Prune Old Transactions
+
+```bash
+# Dry run
+argus prune --before 30d --dry-run
+
+# Actually delete
+argus prune --before 30d
+```
+
+### Reset Everything
+
+```bash
+argus reset --confirm
+```
+
+---
+
+## 🔧 Configuration
+
+Configuration is stored in `~/.argus/config.toml`:
+
+```toml
+[core]
+version = "0.8.0"
+data_dir = "~/.argus"
+
+[memory]
+max_transactions = 100000
+prune_after_days = 365
+
+[recall]
+default_limit = 10
+min_score = 0.3
+```
+
+---
+
+## 📝 Claude Code Integration
+
+ARGUS injects rules into `~/.claude/rules/argus.md` that tell Claude to:
+
+1. **Consult memory before exploring** - Check ARGUS before using Explore/CreateTeam
+2. **Save after actions** - Store results after completing work
+3. **Use semantic search** - Find similar past solutions
+
+### Example Rule
+
+```markdown
+## Mandatory Workflow
+
+Before ANY Explore or CreateTeam action:
+
+1. Search ARGUS memory: `argus recall "<what you're looking for>"`
+2. Review results
+3. Proceed with action using context
+
+After ANY significant action:
+
+1. Save the result: `argus remember "What you did and why"`
+```
+
+---
+
+## 🚀 Migration from v0.6 (MCP Plugin)
+
+The v0.8.0 Rust CLI is a **complete rewrite** that replaces the Node.js MCP plugin:
+
+| v0.6 (Node.js MCP) | v0.8.0 (Rust CLI) |
+|---------------------|---------------------|
+| MCP Server | CLI tool |
+| Docker required | No dependencies |
+| Qdrant vector DB | SQLite FTS5 |
+| Complex setup | Single binary |
+| `~/.argus-plugin/` | `~/.argus/` |
+
+### Data Migration
+
+If you have data from v0.6, you'll need to export/import manually. The database format has changed.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+---
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Inspired by RTK (Rust Token Killer) - CLI-first approach
+- Built with Claude Code in mind - seamless integration
+- Uses SQLite FTS5 for fast semantic search
+
+---
+
+**ARGUS v0.8.0** - Your omniscient sentinel for Claude Code.
