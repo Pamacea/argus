@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.1] - 2026-03-15
+
+### 🐛 Bug Fixes
+
+**CRITICAL - Claude Code Integration:**
+- Fixed plugin.json format - now creates `.claude-plugin/plugin.json` with correct structure
+- Fixed settings.json handling - automatically removes old MCP server entry
+- Added `argus@argus` to `enabledPlugins` in settings.json
+- Fixed hooks to use CLI directly instead of broken daemon (Windows named pipe bug)
+
+**Windows Named Pipe Bug:**
+- Fixed Windows IPC implementation using proper `CreateNamedPipeW` API
+- Added `windows-sys` dependency for native Windows API calls
+- Added `ctrlc` dependency for graceful shutdown handling
+
+**Session Start Hook:**
+- Simplified to use CLI commands directly instead of daemon
+- Removed broken daemon auto-start on Windows
+- Maintains full functionality using `argus recall` CLI
+
+### 🔄 Changed
+
+- Session start hook now only verifies ARGUS CLI availability
+- Pre-tool-use hook uses `argus recall` directly (CLI mode)
+- Post-tool-use hook uses `argus remember` directly (CLI mode)
+- Daemon mode is now optional - CLI mode works perfectly
+
+### ✨ Maintained Features
+
+- ✅ All memory operations work via CLI
+- ✅ Hooks automatically capture context
+- ✅ Semantic search via `argus recall`
+- ✅ Automatic memory save via `argus remember`
+- ✅ Project indexing via `argus index`
+
+---
+
 ## [0.8.0] - 2026-03-13
 
 ### 🎉 Major Release - Complete Rust Rewrite

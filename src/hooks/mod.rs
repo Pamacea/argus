@@ -10,42 +10,34 @@ use std::path::PathBuf;
 
 use crate::common;
 
-/// Claude Code plugin manifest
+/// Claude Code plugin manifest (CORRECT FORMAT)
+/// This is the format expected by Claude Code for .claude-plugin/plugin.json
 #[derive(Debug, Serialize, Deserialize)]
-struct PluginManifest {
-    r#type: String,
+struct ClaudePluginManifest {
     name: String,
-    description: String,
     version: String,
-    author: String,
+    description: String,
+    author: Author,
+    repository: String,
+    license: String,
+    keywords: Vec<String>,
+    hooks: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    homepage: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    repository: Option<String>,
-    hooks: Vec<HookConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mcp_servers: Option<Vec<McpServerConfig>>,
+    env: Option<serde_json::Value>,
 }
 
-/// Hook configuration
 #[derive(Debug, Serialize, Deserialize)]
-struct HookConfig {
-    r#type: String,
-    path: String,
-}
-
-/// MCP Server configuration
-#[derive(Debug, Serialize, Deserialize)]
-struct McpServerConfig {
+struct Author {
     name: String,
-    command: String,
-    args: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
 }
 
 /// Hooks generator for Claude Code integration
 pub struct HooksInstaller {
     claude_dir: PathBuf,
     argus_plugin_dir: PathBuf,
+    claude_plugin_dir: PathBuf,
 }
 
 impl HooksInstaller {
@@ -56,10 +48,12 @@ impl HooksInstaller {
 
         let claude_dir = home.join(".claude");
         let argus_plugin_dir = claude_dir.join("plugins").join("cache").join("argus").join("argus").join("0.8.0");
+        let claude_plugin_dir = argus_plugin_dir.join(".claude-plugin");
 
         Ok(Self {
             claude_dir,
             argus_plugin_dir,
+            claude_plugin_dir,
         })
     }
 
@@ -72,12 +66,15 @@ impl HooksInstaller {
         fs::create_dir_all(&self.argus_plugin_dir)
             .context("Failed to create plugin directory")?;
 
+        fs::create_dir_all(&self.claude_plugin_dir)
+            .context("Failed to create .claude-plugin directory")?;
+
         let hooks_dir = self.argus_plugin_dir.join("hooks");
         fs::create_dir_all(&hooks_dir)
             .context("Failed to create hooks directory")?;
 
-        // Write plugin.json
-        self.write_plugin_json()?;
+        // Write .claude-plugin/plugin.json (CORRECT FORMAT)
+        self.write_claude_plugin_json()?;
 
         // Write all hooks
         self.write_session_start_hook(&hooks_dir)?;
@@ -87,6 +84,9 @@ impl HooksInstaller {
 
         // Write ARGUS rules to .claude/rules/
         self.write_argus_rules()?;
+
+        // Update settings.json to remove old MCP server and enable plugin
+        self.update_settings_json()?;
 
         println!("✓ ARGUS hooks installed successfully");
         Ok(())
@@ -114,145 +114,161 @@ impl HooksInstaller {
 
     /// Check if hooks are installed
     pub fn is_installed(&self) -> bool {
-        self.argus_plugin_dir.exists() &&
-        self.argus_plugin_dir.join("plugin.json").exists()
+        self.claude_plugin_dir.exists() &&
+        self.claude_plugin_dir.join("plugin.json").exists()
     }
 
-    /// Write plugin.json manifest
-    fn write_plugin_json(&self) -> Result<()> {
-        let manifest = PluginManifest {
-            r#type: "hook".to_string(),
+    /// Write .claude-plugin/plugin.json with CORRECT format
+    fn write_claude_plugin_json(&self) -> Result<()> {
+        let manifest = ClaudePluginManifest {
             name: "argus".to_string(),
-            description: "ARGUS - Omniscient memory sentinel for Claude Code".to_string(),
             version: common::VERSION.to_string(),
-            author: "Yanis".to_string(),
-            homepage: Some("https://github.com/Pamacea/argus".to_string()),
-            repository: Some("https://github.com/Pamacea/argus".to_string()),
-            hooks: vec![
-                HookConfig {
-                    r#type: "session-start".to_string(),
-                    path: "hooks/session-start.js".to_string(),
-                },
-                HookConfig {
-                    r#type: "pre-tool-use".to_string(),
-                    path: "hooks/pre-tool-use.js".to_string(),
-                },
-                HookConfig {
-                    r#type: "post-tool-use".to_string(),
-                    path: "hooks/post-tool-use.js".to_string(),
-                },
-                HookConfig {
-                    r#type: "stop".to_string(),
-                    path: "hooks/stop.js".to_string(),
-                },
+            description: "ARGUS - Omniscient memory sentinel for Claude Code (Rust CLI)".to_string(),
+            author: Author {
+                name: "Yanis".to_string(),
+                email: Some("yanis@pamacea.com".to_string()),
+            },
+            repository: "https://github.com/Pamacea/argus".to_string(),
+            license: "MIT".to_string(),
+            keywords: vec![
+                "memory".to_string(),
+                "rag".to_string(),
+                "hooks".to_string(),
+                "context-aware".to_string(),
+                "rust".to_string(),
+                "sentinel".to_string(),
+                "persistence".to_string(),
             ],
-            mcp_servers: None, // Not using MCP, using direct IPC
+            hooks: serde_json::json!({
+                "SessionStart": [
+                    {
+                        "matcher": "*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js",
+                                "timeout": 10000
+                            }
+                        ]
+                    }
+                ],
+                "PreToolUse": [
+                    {
+                        "matcher": "Explore|CreateTeam|Plan",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use.js",
+                                "timeout": 5000
+                            }
+                        ]
+                    }
+                ],
+                "PostToolUse": [
+                    {
+                        "matcher": "Edit|Write|Explore|CreateTeam|Bash|Agent",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.js",
+                                "timeout": 5000
+                            }
+                        ]
+                    }
+                ],
+                "Stop": [
+                    {
+                        "matcher": "*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/stop.js",
+                                "timeout": 5000
+                            }
+                        ]
+                    }
+                ]
+            }),
+            env: Some(serde_json::json!({
+                "ARGUS_VERSION": common::VERSION,
+                "ARGUS_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+            })),
         };
 
         let json = serde_json::to_string_pretty(&manifest)?;
-        fs::write(self.argus_plugin_dir.join("plugin.json"), json)
-            .context("Failed to write plugin.json")?;
+        fs::write(self.claude_plugin_dir.join("plugin.json"), json)
+            .context("Failed to write .claude-plugin/plugin.json")?;
+
+        Ok(())
+    }
+
+    /// Update settings.json to remove old MCP server and enable plugin
+    fn update_settings_json(&self) -> Result<()> {
+        let settings_path = self.claude_dir.join("settings.json");
+
+        if !settings_path.exists() {
+            // Settings file doesn't exist, skip update
+            return Ok(());
+        }
+
+        let settings_content = fs::read_to_string(&settings_path)
+            .context("Failed to read settings.json")?;
+
+        let mut settings: serde_json::Value = serde_json::from_str(&settings_content)
+            .context("Failed to parse settings.json")?;
+
+        // Remove old MCP argus server if exists
+        if let Some(mcp_servers) = settings.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+            mcp_servers.remove("argus");
+        }
+
+        // Add argus to enabledPlugins
+        if let Some(enabled_plugins) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+            enabled_plugins.insert("argus@argus".to_string(), serde_json::json!(true));
+        }
+
+        let updated_json = serde_json::to_string_pretty(&settings)?;
+        fs::write(&settings_path, updated_json)
+            .context("Failed to write updated settings.json")?;
 
         Ok(())
     }
 
     /// Write session-start hook
+    /// NOTE: Uses CLI directly instead of daemon due to Windows named pipe bug
     fn write_session_start_hook(&self, hooks_dir: &PathBuf) -> Result<()> {
         let hook = r#""use strict";
 
 // ARGUS Session Start Hook
-// Auto-starts the ARGUS daemon if not already running
+// Initializes ARGUS for the session using CLI (not daemon)
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Daemon lock file to prevent multiple instances
-function getDaemonLockPath() {
-    const homeDir = require('os').homedir();
-    return path.join(homeDir, '.argus', 'daemon.lock');
-}
-
-// Check if daemon is running
-function isDaemonRunning() {
-    const lockPath = getDaemonLockPath();
-    try {
-        if (fs.existsSync(lockPath)) {
-            const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
-            // Check if process is still alive by trying to ping
-            const pid = lock.pid;
-            try {
-                process.kill(pid, 0); // Signal 0 checks if process exists
-                return true;
-            } catch (e) {
-                // Process is dead, clean up lock
-                fs.unlinkSync(lockPath);
-                return false;
-            }
-        }
-    } catch (e) {
-        // Lock file corrupted, clean up
-        try { fs.unlinkSync(lockPath); } catch (_) {}
-    }
-    return false;
-}
-
-// Start daemon in background
-function startDaemon() {
-    const homeDir = require('os').homedir();
-    const lockPath = getDaemonLockPath();
-
-    // Create .argus directory if not exists
-    const argusDir = path.join(homeDir, '.argus');
-    if (!fs.existsSync(argusDir)) {
-        fs.mkdirSync(argusDir, { recursive: true });
-    }
-
-    // Spawn daemon detached
-    const daemon = spawn('argus', ['daemon', 'start', '--background'], {
-        stdio: 'ignore',
-        detached: true,
-        shell: process.platform === 'win32'
-    });
-
-    daemon.unref();
-
-    // Wait a bit and check if it started
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(isDaemonRunning());
-        }, 500);
-    });
-}
-
 async function sessionStart(context) {
-    // Extract session info for theme (discussion subject)
     const workingDir = context.workingDir || process.cwd();
     const platform = context.platform || process.platform;
-    const theme = context.theme || 'general'; // Discussion subject
 
     console.log('[ARGUS] Starting session...');
     console.log('[ARGUS] Working dir:', workingDir);
     console.log('[ARGUS] Platform:', platform);
-    console.log('[ARGUS] Discussion:', theme);
 
-    // Check if daemon is already running
-    if (isDaemonRunning()) {
-        console.log('[ARGUS] ✓ Daemon already running - multi-session enabled');
-        return;
-    }
+    // Verify ARGUS is available
+    const check = spawn('argus', ['--version'], {
+        stdio: 'pipe',
+        timeout: 5000
+    });
 
-    // Start the daemon
-    console.log('[ARGUS] Starting daemon in background...');
-    const started = await startDaemon();
-
-    if (started) {
-        console.log('[ARGUS] ✓ Daemon started successfully');
-        console.log('[ARGUS] ✓ Automatic memory capture enabled');
-    } else {
-        console.log('[ARGUS] ⚠ Failed to start daemon');
-        console.log('[ARGUS] Manual start: argus daemon start');
-    }
+    check.on('close', (code) => {
+        if (code === 0) {
+            console.log('[ARGUS] ✓ ARGUS CLI ready - Memory capture enabled');
+            console.log('[ARGUS] Use "argus recall <query>" to search memory');
+        } else {
+            console.log('[ARGUS] ⚠ ARGUS CLI not found');
+            console.log('[ARGUS] Install with: cargo install argus-tool');
+        }
+    });
 }
 
 module.exports = { sessionStart };
@@ -326,8 +342,7 @@ module.exports = { preToolUse };
 async function postToolUse(context, toolName, toolInput, result) {
     // Tools that should be recorded
     const recordableTools = [
-        'Edit', 'Write', 'Read', 'Explore', 'CreateTeam',
-        'Bash', 'Agent'
+        'Edit', 'Write', 'Explore', 'CreateTeam', 'Bash', 'Agent'
     ];
 
     if (!recordableTools.includes(toolName)) {
@@ -354,9 +369,6 @@ async function postToolUse(context, toolName, toolInput, result) {
             description = `Created ${toolInput.file_path}`;
             category = 'create';
             break;
-        case 'Read':
-            // Don't record reads
-            return;
         case 'Explore':
             description = `Explored: ${toolInput.prompt || toolInput.query}`;
             category = 'explore';
@@ -398,7 +410,7 @@ async function postToolUse(context, toolName, toolInput, result) {
     }
     args.push('--category', category);
 
-    // Save to ARGUS
+    // Save to ARGUS (fire and forget)
     spawn('argus', args, {
         stdio: 'ignore',
         detached: true
@@ -539,17 +551,20 @@ mod tests {
     }
 
     #[test]
-    fn test_manifest_serialization() {
-        let manifest = PluginManifest {
-            r#type: "hook".to_string(),
+    fn test_claude_plugin_manifest_serialization() {
+        let manifest = ClaudePluginManifest {
             name: "argus".to_string(),
-            description: "Test".to_string(),
             version: "0.8.0".to_string(),
-            author: "Test".to_string(),
-            homepage: None,
-            repository: None,
-            hooks: vec![],
-            mcp_servers: None,
+            description: "Test".to_string(),
+            author: Author {
+                name: "Test".to_string(),
+                email: None,
+            },
+            repository: "https://github.com/Pamacea/argus".to_string(),
+            license: "MIT".to_string(),
+            keywords: vec!["memory".to_string()],
+            hooks: serde_json::json!({}),
+            env: None,
         };
 
         let json = serde_json::to_string(&manifest);
