@@ -18,7 +18,7 @@ use cli::commands::*;
 /// ARGUS - Omniscient memory sentinel for Claude Code
 #[derive(Parser)]
 #[command(name = "argus")]
-#[command(version = "0.8.0")]
+#[command(version = "0.8.2")]
 #[command(about = "ARGUS maintains semantic memory of your Claude Code sessions", long_about = None)]
 #[command(author = "Yanis")]
 #[command(long_about = "ARGUS is a memory system that helps you remember past actions and \
@@ -36,6 +36,18 @@ struct Cli {
 enum Commands {
     /// Initialize ARGUS (create ~/.argus/ + inject Claude Code rules)
     Init {
+        /// Global installation (installs hooks to ~/.claude/hooks/)
+        #[arg(short = 'g', long)]
+        global: bool,
+
+        /// Show installation status instead of installing
+        #[arg(long)]
+        show: bool,
+
+        /// Uninstall ARGUS hooks instead of installing
+        #[arg(long)]
+        uninstall: bool,
+
         /// Skip injecting rules to ~/.claude/rules/
         #[arg(long)]
         no_rules: bool,
@@ -123,13 +135,6 @@ enum Commands {
     Complete {
         /// Shell type
         shell: Option<String>,
-    },
-
-    /// Install Claude Code hooks
-    Install {
-        /// Uninstall hooks instead of installing
-        #[arg(long)]
-        uninstall: bool,
     },
 
     /// Daemon management
@@ -224,7 +229,9 @@ async fn main() -> Result<()> {
 
     // Run command
     match cli.command {
-        Commands::Init { no_rules } => cmd_init(no_rules).await,
+        Commands::Init { global, show, uninstall, no_rules } => {
+            cmd_init_v2(global, show, uninstall, no_rules).await
+        }
         Commands::Remember { description, tags, category } => {
             cmd_remember(description, tags, category).await
         }
@@ -254,9 +261,6 @@ async fn main() -> Result<()> {
         }
         Commands::Complete { shell } => {
             Cli::generate_completions(shell)
-        }
-        Commands::Install { uninstall } => {
-            cmd_install(uninstall).await
         }
         Commands::Daemon { daemon_cmd } => match daemon_cmd {
             DaemonCommand::Start { background, foreground } => {

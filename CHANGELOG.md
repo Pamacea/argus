@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.2] - 2026-03-16
+
+### 🎉 Major Architecture Change - RTK-Style Hooks
+
+**BREAKING CHANGE - Complete removal of plugin system**
+
+ARGUS now follows the same architecture as RTK (Rust Token Killer) and Aureus:
+- **No more plugin.json** - Removed Claude Code plugin system entirely
+- **No more marketplace** - No marketplace dependency
+- **Direct hooks** - Hooks installed directly to `~/.claude/hooks/`
+- **Simple installation** - `argus init -g` for global hook installation
+- **Clean uninstall** - `argus init -g --uninstall` for complete removal
+- **Status check** - `argus init --show` to verify installation
+
+### 🔄 Breaking Changes
+
+- **Removed:** Plugin system (`plugin.json`, `marketplace.json`)
+- **Removed:** `enabledPlugins` in `settings.json`
+- **Removed:** `.claude-plugin/` directory structure
+- **Changed:** Hook installation method - now direct to `~/.claude/hooks/`
+- **Changed:** Hook registration - now in `settings.json` under `hooks` key
+
+### ✨ New Features
+
+**Installation:**
+```bash
+argus init -g              # Install hooks globally
+argus init --show          # Show installation status
+argus init -g --uninstall  # Uninstall hooks
+```
+
+**Hooks:**
+- `argus-session.mjs` - SessionStart hook (auto-verify CLI, auto-index)
+- `argus-pre-tool.mjs` - PreToolUse hook (memory consultation)
+- `argus-post-tool.mjs` - PostToolUse hook (auto-recording)
+
+**Awareness File:**
+- `~/.claude/ARGUS.md` - Minimal awareness file (10 lines, like RTK.md)
+
+### 🔧 Technical Details
+
+**Hook Installation:**
+- Hooks are Node.js `.mjs` files (ES modules)
+- Installed to `~/.claude/hooks/`
+- Registered in `settings.json` under `hooks.SessionStart`, `hooks.PreToolUse`, `hooks.PostToolUse`
+- Executable on Unix (`chmod +x`)
+
+**Settings.json Format:**
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "node ~/.claude/hooks/argus-session.mjs",
+        "timeout": 10000
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "Explore|CreateTeam|Task|Agent|Plan",
+      "hooks": [{
+        "type": "command",
+        "command": "node ~/.claude/hooks/argus-pre-tool.mjs",
+        "timeout": 5000
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Edit|Write|Explore|CreateTeam|Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "node ~/.claude/hooks/argus-post-tool.mjs",
+        "timeout": 5000
+      }]
+    }]
+  }
+}
+```
+
+### 📁 File Changes
+
+**Added:**
+- `src/hooks/mod.rs` - Rewritten for RTK-style installation
+
+**Modified:**
+- `src/main.rs` - Updated Init command with `-g`, `--show`, `--uninstall` options
+- `src/cli/commands.rs` - Added `cmd_init_v2()` function
+- `Cargo.toml` - Version bumped to 0.8.2
+- `CLAUDE.md` - Complete rewrite for RTK-style architecture
+- `CHANGELOG.md` - This entry
+
+**Removed (conceptually):**
+- Plugin system dependencies
+- Marketplace integration
+- Complex plugin directory structure
+
+### 🎯 Benefits
+
+**Before (v0.8.1):**
+- ❌ Complex plugin system
+- ❌ Marketplace dependency
+- ❌ Plugin not found errors
+- ❌ Hard to debug
+- ❌ Heavy installation
+
+**After (v0.8.2):**
+- ✅ Simple direct hooks
+- ✅ No marketplace needed
+- ✅ Easy to debug
+- ✅ Fast installation
+- ✅ Compatible with RTK/Aureus
+- ✅ Clean uninstall
+
+### 📝 Migration
+
+**From v0.8.1 to v0.8.2:**
+
+1. Uninstall old hooks:
+```bash
+argus install --uninstall  # Old command
+```
+
+2. Install new version:
+```bash
+cargo install --path . --force
+```
+
+3. Install new hooks:
+```bash
+argus init -g
+```
+
+4. Verify:
+```bash
+argus init --show
+```
+
+### 🙏 Credits
+
+Inspired by:
+- **RTK (Rust Token Killer)** - Direct hooks architecture
+- **Aureus** - Similar hook installation pattern
+
+---
+
 ## [0.8.1] - 2026-03-15
 
 ### 🐛 Bug Fixes

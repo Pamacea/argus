@@ -1,326 +1,108 @@
 # ARGUS - Sentinelle Omnisciente pour Claude Code
 
-**Version:** 0.5.11 | **License:** MIT
+**Version:** 0.8.2 | **License:** MIT | **Architecture:** RTK-Style Hooks
 
 ---
 
 ## 🎯 What is ARGUS?
 
-ARGUS is a context-aware memory system for Claude Code that forces the AI to consult historical context and technical documentation before taking any exploratory or creative action. It acts as an omniscient sentinel, ensuring that Claude always has complete awareness of your project's patterns, decisions, and constraints.
+ARGUS is a **context-aware memory system** for Claude Code that stores and retrieves your development actions, patterns, and decisions. Like RTK (Rust Token Killer) and Aureus, ARGUS uses **direct hooks** in `~/.claude/hooks/` - no plugin system, no marketplace dependency.
 
 **Problem Solved:** Claude Code sometimes explores or creates solutions without checking existing code patterns, leading to inconsistent implementations, duplicated work, and violations of project conventions.
 
-**Solution:** ARGUS intercepts `Explore` and `CreateTeam` tool calls, enforces consultation of RAG (Retrieval-Augmented Generation) memory, file indexes, and documentation, then saves all transactions for future reference.
+**Solution:** ARGUS intercepts `Explore` and `CreateTeam` tool calls, enforces consultation of memory, then saves all transactions for future reference.
 
 ---
 
-## ✨ Key Features (v0.5.11)
+## ✨ What's New in v0.8.2
 
-### 🐛 Transaction Persistence Fix (CRITICAL in v0.5.11)
-- **Fixed Data Loss** - Transactions now persist correctly across Claude Code sessions
-- **Atomic Writes** - Uses temporary file + rename pattern for safe database writes
-- **Auto-Flush System** - Automatic database flush every 10 seconds with pending changes
-- **Shutdown Hooks** - Forced save on SIGINT, SIGTERM, beforeExit events
-- **Enhanced Logging** - Debug logs show save operations and transaction counts
-- **Verified Working** - 823+ transactions persisted in `~/.argus/argus.db` (6+ MB)
+### 🔧 RTK-Style Architecture (MAJOR CHANGE)
+- **No More Plugin System** - Removed plugin.json, marketplace dependency
+- **Direct Hooks** - Hooks installed to `~/.claude/hooks/` like RTK and Aureus
+- **Simple Installation** - `argus init -g` for global hook installation
+- **Clean Uninstall** - `argus init -g --uninstall` for complete removal
+- **Status Check** - `argus init --show` to verify installation
 
-**Before v0.5.11:**
-- Transactions lost when Claude Code restarted
-- No automatic flush mechanism
-- Silent failures in database saves
-
-**After v0.5.11:**
-- ✅ Guaranteed persistence with atomic writes
-- ✅ Auto-flush every 10 seconds
-- ✅ Forced save on shutdown
-- ✅ Error logging for debugging
-
-### 🔗 Git Integration (v0.5.10)
-- **Automatic Git Detection** - Recognizes git repositories and captures context
-- **Branch Tracking** - Records current git branch for every transaction
-- **Commit References** - Stores last commit hash, message, author, and date
-- **Diff Preview** - Captures git diff preview (500 chars) for file modifications
-- **File Status Tracking** - Records git status (tracked, modified, staged, added, deleted)
-- **Git Badge** - Activity feed shows ⚡ Git badge for tracked repositories
-- **Non-Breaking** - Gracefully degrades for non-git projects
-
-**Git Integration Example:**
-```json
-{
-  "git": {
-    "enabled": true,
-    "branch": "main",
-    "lastCommit": {
-      "hash": "f44ca382793f8fc497d9aef3725b0dc819e1e254",
-      "message": "UPDATE: Argus - v0.5.9",
-      "author": "Yanis",
-      "date": "2026-02-23 21:03:06 +0100"
-    }
-  }
-}
+### 📦 Simplified Structure
+```
+~/.claude/
+├── hooks/
+│   ├── argus-session.mjs   # SessionStart hook
+│   ├── argus-pre-tool.mjs  # PreToolUse hook
+│   └── argus-post-tool.mjs # PostToolUse hook
+├── ARGUS.md                # Awareness file (10 lines)
+└── settings.json           # Hooks registered here
 ```
 
-**Change Preview with Git:**
-```json
-{
-  "changePreview": {
-    "type": "edit",
-    "file": "/path/to/file.js",
-    "oldLength": 100,
-    "newLength": 150,
-    "git": {
-      "status": { "tracked": true, "modified": true },
-      "diffPreview": "diff --git a/file.js b/file.js...",
-      "fullDiffAvailable": true
-    }
-  }
-}
-```
-
-### 🎨 Complete Dashboard Redesign
-- **New Sidebar Navigation** - Clean left sidebar with icons for all sections
-- **Vercel-Inspired Design** - Black/white/gray palette with subtle blue accents
-- **No More Cards** - Clean separators and visual hierarchy
-- **Enhanced UX** - Better organization and information architecture
-
-### 🔧 New Features
-- **Transaction Search** - Search through all transactions by keyword
-- **History Pagination** - Browse history 10 items at a time
-- **Auto-Refresh** - Dashboard updates every 30 seconds automatically
-- **New API Endpoint** - `/api/transactions` for fetching history with pagination
-
-### 📊 Dashboard Sections
-- **Overview** - Index statistics at a glance
-- **Recent Activity** - Live feed of recent transactions with git badges
-- **History/Log** - Complete searchable transaction history with git details
-- **Memory Engine** - Storage and search engine status
-- **MCP Tools** - List of all available MCP tools
-- **Server Endpoints** - Server information and process details
-- **API Documentation** - Complete API reference
-
-### 🔍 Dual-Mode Semantic Search
-- **Local Search (TF-IDF)** - Works without Docker, zero external dependencies
-- **Vector Search (Qdrant)** - Advanced semantic search when Docker is available
-- **Automatic Fallback** - Seamlessly switches between modes
-
-### 📁 Smart Auto-Indexing
-- **Real File Scanning** - Actually walks directories and indexes files
-- **Multi-Language** - Supports .js, .ts, .jsx, .tsx, .py, .rs, .go, .java
-- **Smart Filtering** - Ignores node_modules, .git, dist, build
-- **Persistent Index** - Index data saved between sessions
-
-### 🧠 Intelligent Summaries (v0.5.9)
-- **Human-Readable Descriptions** - Every action gets a clear, contextual summary
-- **Task Context Tracking** - Knows WHAT you're working on (feature, bugfix, refactor, etc.)
-- **Enhanced Recent Activity** - Shows "Building feature: Modified file.js" instead of "Edit file.js..."
-- **Intent Detection** - Automatically infers purpose from user prompts
-- **Full Context Memory** - Remembers user intent across multiple actions
-
-**Example Comparisons:**
-```
-Before: Edit session-start.js: async function...
-After:  Building feature: Modified session-start.js
-
-Before: Bash with command="git status"
-After:  Working on task: Ran git status
-
-Before: Write install-mcp.js (145 lines)
-After:  Setting up: Created install-mcp.js
-```
-
-### 🪝 Smart Hooks
-- **PreToolUse** - Intercepts Explore and CreateTeam before execution
-- **PostToolUse** - Captures Edit/Write operations with detailed tracking and git info
-- **SessionStart** - Initializes ARGUS and auto-indexes current project
-- **Stop** - Persists state on session shutdown
-
-### 📊 Web Dashboard
-- **Real-time Monitoring** at `http://localhost:30000`
-- **Indexed Projects** - View all indexed projects with file counts
-- **Transaction History** - Complete audit trail with git integration
-- **Git Info Panels** - Shows branch, commit, and diff information
-- **API Endpoints** - RESTful API for all data
-
-### 🔧 MCP Integration
-- **6 MCP Tools** - Complete toolkit for memory and search
-- **Queue System** - Reliable edit/prompt tracking
-- **Transaction Storage** - SQLite database with optional Qdrant
+### 🦅 Key Features
+- **Automatic Memory Consultation** - Hooks check ARGUS before Explore/CreateTeam
+- **Automatic Recording** - Hooks save Edit/Write actions to memory
+- **Auto-Indexing** - Projects indexed automatically (3h threshold)
+- **Fast Semantic Search** - SQLite-based TF-IDF search
+- **Zero External Dependencies** - No Docker required
 
 ---
 
 ## 🚀 Quick Start
 
+### Installation
+
 ```bash
-# Install dependencies
-npm install
+# Build and install ARGUS CLI
+cd C:\Users\Yanis\Projects\plugins\argus
+cargo install --path .
 
-# Build the MCP server
-npm run build
+# Initialize and install hooks (RTK-style)
+argus init -g
 
-# Start ARGUS with Claude Code
-# ARGUS will automatically initialize on session start
+# Verify installation
+argus init --show
 ```
 
-**ARGUS starts automatically** when you begin a Claude Code session. No manual activation required.
+### Usage
 
----
+```bash
+# Search memory
+argus recall "auth implementation"
 
-## 🆕 What's New in v0.5.3
+# Remember something
+argus remember "Fixed JWT token expiration bug"
 
-### Local Semantic Search
-ARGUS now includes a built-in TF-IDF search engine:
+# Index current project
+argus index
 
-**Benefits:**
-- ✅ Works without Docker or Qdrant
-- ✅ Faster than vector search for simple queries
-- ✅ Zero external dependencies
-- ✅ Automatic fallback from Qdrant
+# View statistics
+argus stats
 
-### Auto-Index Fix
-The auto-indexing feature now works correctly:
-
-**What Changed:**
-- Actually scans project directories (not just tracking)
-- Indexes multiple file types (.js, .ts, .jsx, .tsx, .py, .rs, .go, .java)
-- Smart filtering (ignores node_modules, .git, dist, build)
-- Creates index files in `~/.argus/` with metadata
-
-### Dashboard Enhancements
-New features in the web dashboard:
-
-**Indexed Projects Section:**
-- List of all indexed projects
-- File counts per project
-- Last indexed timestamps
-- Full vs incremental indexing status
-
-**New API Endpoint:**
-- `GET /api/indexed` - Returns indexed projects data
+# List recent transactions
+argus list
+```
 
 ---
 
 ## 🔧 How It Works
 
-### 1. Automatic Initialization
-When Claude Code starts, ARGUS initializes:
-- Starts the MCP server
-- Loads local semantic search index
-- Prepares the transaction storage
-- Auto-indexes current project (if needed)
-- Starts web dashboard
+### 1. Installation (`argus init -g`)
+- Creates `~/.argus/` directory
+- Installs hooks to `~/.claude/hooks/`
+- Creates `~/.claude/ARGUS.md` awareness file
+- Registers hooks in `~/.claude/settings.json`
+- Backs up existing `settings.json`
 
-### 2. Pre-Action Interception
-Before any `Explore` or `CreateTeam` action:
-- ARGUS intercepts the tool call
-- Checks if you consulted the memory
-- If not, injects instruction to call `argus__check_hooks`
+### 2. SessionStart Hook
+- Runs when Claude Code starts
+- Verifies ARGUS CLI is available
+- Auto-indexes current project (if > 3h since last index)
 
-### 3. Context Retrieval
-The `argus__check_hooks` tool retrieves:
-- Similar past transactions (local TF-IDF or Qdrant vector search)
-- Relevant code from indexed projects
-- Project patterns and conventions
-- Any relevant constraints or decisions
+### 3. PreToolUse Hook
+- Intercepts `Explore`, `CreateTeam`, `Task`, `Agent`, `Plan`
+- Searches ARGUS memory automatically
+- Displays relevant context to Claude
 
-### 4. Action Execution
-Claude then executes the original action with full context:
-- Awareness of existing patterns
-- Knowledge of past solutions
-- Understanding of project constraints
-- Access to relevant documentation
-
-### 5. Transaction Saving
-After action completion:
-- `argus__save_transaction` stores the result
-- Result is indexed for local and/or vector search
-- Files are queued for processing
-- History is preserved for future reference
-
----
-
-## 📊 Web Dashboard
-
-Access the ARGUS dashboard at `http://localhost:30000`:
-
-- **Real-time Stats** - Transaction counts, hook counts, RAG status
-- **Transaction History** - Browse all past actions with search
-- **Health Monitoring** - Server status, uptime, process info
-- **API Documentation** - Complete API reference at `/api/docs`
-
----
-
-## 🛠️ MCP Tools
-
-### argus__check_hooks
-**MANDATORY** before any Explore or CreateTeam action.
-
-```typescript
-{
-  prompt: string           // The user's request
-  toolName: string        // Tool being used (e.g., "Explore")
-  context: {
-    cwd: string           // Current working directory
-    platform: string      // Operating system
-  }
-}
-```
-
-Returns relevant context: similar transactions, code matches, documentation.
-
-### argus__save_transaction
-Saves a completed transaction for future reference.
-
-```typescript
-{
-  prompt: string
-  promptType: "user" | "tool" | "system"
-  context: { cwd, platform, toolsAvailable, files }
-  result: { success, output, error, duration, toolsUsed }
-  metadata?: { tags, category }
-}
-```
-
-### argus__search_memory
-Semantic search across transaction history.
-
-```typescript
-{
-  query: string           // Search query
-  limit?: number          // Max results (default: 10)
-  filters?: {
-    date_from?: timestamp
-    date_to?: timestamp
-    tags?: string[]
-    category?: string
-  }
-}
-```
-
-### argus__get_history
-Retrieve transaction history with pagination.
-
-```typescript
-{
-  limit?: number          // Max results (default: 50)
-  offset?: number         // Pagination offset (default: 0)
-  sessionId?: string      // Filter by session
-}
-```
-
-### argus__index_codebase
-Index project files for semantic search.
-
-```typescript
-{
-  rootPath: string        // Project root directory
-  incremental?: boolean   // Only index changed files (default: false)
-}
-```
-
-### argus__get_stats
-Get ARGUS system statistics.
-
-Returns: transaction counts, hook counts, Qdrant status.
+### 4. PostToolUse Hook
+- Records `Edit`, `Write`, `Explore`, `CreateTeam`, `Bash`
+- Auto-categorizes and tags actions
+- Saves to SQLite database
 
 ---
 
@@ -328,160 +110,241 @@ Returns: transaction counts, hook counts, Qdrant status.
 
 ```
 argus/
-├── .claude-plugin/
-│   ├── plugin.json          # Plugin manifest
-│   └── marketplace.json     # Marketplace metadata
-├── plugins/argus/
-│   ├── .claude-plugin/
-│   │   └── plugin.json      # Sub-plugin manifest
-│   ├── hooks/               # Claude Code hooks
-│   │   ├── session-start.js
-│   │   ├── pre-tool-use.js
-│   │   ├── post-tool-use.js
-│   │   └── stop.js
-│   ├── mcp/                 # MCP Server
-│   │   ├── src/
-│   │   │   ├── handlers/    # Tool implementations
-│   │   │   ├── storage/     # RocksDB wrapper
-│   │   │   ├── rag/         # Qdrant integration
-│   │   │   └── indexer/     # File scanning
-│   │   ├── web/
-│   │   │   ├── index.html   # Dashboard UI
-│   │   │   └── server.js    # Dashboard server
-│   │   └── package.json
-│   ├── docs/                # Documentation
-│   │   ├── ARCHITECTURE.md
-│   │   └── API.md
-│   └── package.json
+├── src/
+│   ├── main.rs              # CLI entry point
+│   ├── cli/                 # Command handling
+│   │   ├── mod.rs
+│   │   ├── commands.rs      # Command implementations
+│   │   ├── config.rs
+│   │   └── output.rs
+│   ├── core/                # Core functionality
+│   │   ├── mod.rs
+│   │   ├── memory.rs        # Memory engine
+│   │   ├── search.rs        # Semantic search
+│   │   └── index.rs         # Project indexing
+│   ├── storage/             # Database layer
+│   │   ├── mod.rs
+│   │   ├── db.rs            # SQLite connection
+│   │   ├── models.rs        # Data models
+│   │   └── error.rs
+│   ├── hooks/               # Hook installation (RTK-style)
+│   │   └── mod.rs
+│   ├── agent/               # Optional daemon feature
+│   │   └── mod.rs
+│   ├── common.rs            # Shared constants
+│   └── lib.rs
+├── Cargo.toml               # Rust dependencies
 ├── CLAUDE.md                # This file
 ├── CHANGELOG.md             # Version history
-└── package.json
+├── INSTALL.md               # Installation guide
+└── README.md                # Project README
 ```
 
 ---
 
-## 🔍 Usage Examples
+## 🛠️ CLI Commands
 
-### Example 1: Exploring Code
+### `argus init [OPTIONS]`
+Initialize ARGUS and/or install hooks.
 
-**Without ARGUS:**
-```
-User: "Explore the auth module"
-Claude: [Explores without context, might miss patterns]
-```
-
-**With ARGUS:**
-```
-User: "Explore the auth module"
-ARGUS: [Intercepts, retrieves past auth explorations, finds patterns]
-Claude: [Explores with full context of existing implementations]
+```bash
+argus init -g              # Install hooks globally
+argus init -g --uninstall  # Uninstall hooks
+argus init --show          # Show installation status
+argus init --no-rules      # Skip rules injection
 ```
 
-### Example 2: Creating a Team
+### `argus recall <query>`
+Search memory for past transactions.
 
-**Without ARGUS:**
-```
-User: "Create a team to refactor the payment system"
-Claude: [Creates team without checking past payment work]
-```
-
-**With ARGUS:**
-```
-User: "Create a team to refactor the payment system"
-ARGUS: [Retrieves payment history, finds past decisions]
-Claude: [Creates team with awareness of payment patterns]
+```bash
+argus recall "auth bug"           # Search
+argus recall "refactor" -l 20     # Limit results
+argus recall "fix" --full         # Show full details
 ```
 
-### Example 3: Semantic Search
+### `argus remember <description>`
+Save an action to memory.
 
-```typescript
-// Search for how we implemented JWT refresh tokens
-const results = await argus__search_memory({
-  query: "JWT refresh token implementation authentication",
-  limit: 5
-})
+```bash
+argus remember "Fixed login bug"
+argus remember "Added OAuth" --tags "feature,auth" --category "feature"
+```
 
-// Returns similar transactions with solutions
+### `argus index`
+Index current project for semantic search.
+
+```bash
+argus index                 # Index current directory
+argus index -p ./src        # Index specific path
+argus index --force         # Force re-index
+```
+
+### `argus stats`
+Show memory statistics.
+
+```bash
+argus stats
+# → Total transactions, size, oldest/newest, by category
+```
+
+### `argus list`
+List recent transactions.
+
+```bash
+argus list -l 50            # List last 50 transactions
+```
+
+### `argus show <id>`
+Show specific transaction details.
+
+```bash
+argus show 123
+```
+
+### `argus prune`
+Delete old transactions.
+
+```bash
+argus prune 30d             # Delete transactions older than 30 days
+argus prune 3m --dry-run    # Preview what would be deleted
+```
+
+### `argus reset`
+Delete all ARGUS data.
+
+```bash
+argus reset --confirm       # DANGEROUS! Deletes everything
 ```
 
 ---
 
-## 🎯 Best Practices
+## 📊 Data Storage
 
-### 1. Always Consult ARGUS
-Before using Explore or CreateTeam, always call `argus__check_hooks` first.
+All data stored locally in `~/.argus/`:
 
-### 2. Save Transactions
-After completing work, call `argus__save_transaction` to preserve context.
+```
+~/.argus/
+├── memory.db               # SQLite database (transactions)
+└── index/                  # Project index data
+    └── <project-hash>.json # Per-project index metadata
+```
 
-### 3. Use Semantic Search
-When unsure how something was implemented, use `argus__search_memory`.
+### Transaction Schema
+```sql
+CREATE TABLE transactions (
+    id INTEGER PRIMARY KEY,
+    prompt TEXT NOT NULL,
+    result TEXT,
+    context TEXT,           -- JSON: cwd, platform, git info
+    metadata TEXT,          -- JSON: tags, category, summary
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
 
-### 4. Check the Dashboard
-Monitor activity and browse history at `http://localhost:30000`.
+---
 
-### 5. Index Your Codebase
-Run `argus__index_codebase` after major changes for up-to-date search.
+## 🎯 Usage Examples
+
+### Example 1: Before Exploring Code
+
+**Automatic via hooks:**
+```
+User: "Explore the auth module"
+ARGUS Hook: [Searches memory for "auth module"]
+ARGUS: Found 3 relevant past explorations
+Claude: [Explores with full context]
+```
+
+### Example 2: After Making Changes
+
+**Automatic via hooks:**
+```
+Claude: [Edits auth.js]
+ARGUS Hook: [Categorizes as "edit", tags as "auth"]
+ARGUS: Saved to memory (#123)
+```
+
+### Example 3: Manual Memory Search
+
+```bash
+$ argus recall "JWT token"
+  #123 Fixed JWT token expiration bug
+  at: 2026-03-15 14:30
+  prompt: Fixed JWT token expiration bug
+  tags: bugfix, auth
+```
 
 ---
 
 ## 🔧 Configuration
 
-ARGUS requires minimal configuration:
-
-- **Qdrant Vector DB** - Automatically started on `http://localhost:6333`
-- **RocksDB Storage** - Automatic in `~/.argus/storage`
-- **Web Dashboard** - Available at `http://localhost:30000`
-
-### Environment Variables (Optional)
+ARGUS requires minimal configuration. All defaults work out of the box:
 
 ```bash
-ARGUS_PORT=30000              # Dashboard port
-ARGUS_HOST=localhost          # Dashboard host
-ARGUS_QDRANT_URL=http://localhost:6333  # Qdrant URL
-ARGUS_STORAGE_PATH=~/.argus/storage     # Storage path
+# Data directory (default: ~/.argus/)
+ARGUS_DATA_DIR=/custom/path
+
+# Auto-index threshold (default: 3 hours)
+ARGUS_INDEX_THRESHOLD=3h
+
+# Search result limit (default: 10)
+ARGUS_SEARCH_LIMIT=10
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Dashboard Not Loading
-```bash
-# Check if the dashboard server is running
-curl http://localhost:30000/health
+### Hooks not working?
 
-# Restart ARGUS session
+```bash
+# Check hook status
+argus init --show
+
+# Reinstall hooks
+argus init -g --uninstall
+argus init -g
+
+# Check settings.json
+cat ~/.claude/settings.json | grep argus
 ```
 
-### Qdrant Connection Failed
+### "argus command not found"?
+
 ```bash
-# Ensure Qdrant is running
-docker run -p 6333:6333 qdrant/qdrant
+# Check installation
+which argus
+
+# Reinstall
+cd /path/to/argus
+cargo install --path . --force
 ```
 
-### No RAG Results
+### Memory not saving?
+
 ```bash
-# Index your codebase
-# Call: argus__index_codebase with rootPath
+# Check database exists
+ls -la ~/.argus/memory.db
+
+# Check permissions
+argus stats
 ```
 
 ---
 
 ## 📚 Version History
 
-See **CHANGELOG.md** for detailed version history.
+### v0.8.2 (Current)
+- **RTK-style hooks** - Direct installation to `~/.claude/hooks/`
+- **Removed plugin system** - No more plugin.json or marketplace
+- **Simplified install** - `argus init -g` for global installation
+- **Added status check** - `argus init --show`
+- **Clean uninstall** - `argus init -g --uninstall`
 
-### Current Version: 0.5.9
-
-**Recent Updates:**
-- Intelligent summary generation for all tool actions
-- Task context tracking across session
-- Enhanced Recent Activity with human-readable descriptions
-- Intent detection from user prompts
-- Pre-prompt hook captures user goals
-- Auto-configuration of MCP server on install
-- Standalone queue processor for transactions
+### Previous versions
+- See CHANGELOG.md for full history
 
 ---
 
@@ -499,4 +362,4 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**ARGUS v0.5.9** - Your omniscient sentinel for Claude Code.
+**ARGUS v0.8.2** - Your omniscient sentinel for Claude Code.
