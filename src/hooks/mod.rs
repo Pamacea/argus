@@ -592,7 +592,7 @@ Toutes les données sont stockées localement :
 
         // Remove hook registrations that contain "argus"
         if let Some(hooks_obj) = settings.get_mut("hooks").and_then(|v| v.as_object_mut()) {
-            hooks_obj.retain(|key, value| {
+            hooks_obj.retain(|_key, value| {
                 // Keep hooks that don't reference argus
                 let json_str = value.to_string();
                 !json_str.contains("argus")

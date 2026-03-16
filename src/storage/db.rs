@@ -112,6 +112,7 @@ impl Db {
     }
 
     /// Get the database path
+    #[allow(dead_code)]
     pub fn path(&self) -> &PathBuf {
         &self.path
     }

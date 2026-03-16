@@ -18,7 +18,7 @@ use cli::commands::*;
 /// ARGUS - Omniscient memory sentinel for Claude Code
 #[derive(Parser)]
 #[command(name = "argus")]
-#[command(version = "0.8.2")]
+#[command(version = "0.8.4")]
 #[command(about = "ARGUS maintains semantic memory of your Claude Code sessions", long_about = None)]
 #[command(author = "Yanis")]
 #[command(long_about = "ARGUS is a memory system that helps you remember past actions and \
@@ -129,6 +129,44 @@ enum Commands {
         /// Confirm without prompting
         #[arg(long)]
         confirm: bool,
+    },
+
+    /// Delete a specific transaction
+    Delete {
+        /// Transaction ID
+        id: i64,
+    },
+
+    /// Search in indexed code
+    SearchCode {
+        /// Search query
+        query: String,
+
+        /// Maximum number of results
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Search in the database using FTS5
+    SearchDb {
+        /// Search query
+        query: String,
+
+        /// Maximum number of results
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Unindex a project
+    Unindex {
+        /// Project path
+        path: PathBuf,
+    },
+
+    /// Check if a project is indexed
+    IsIndexed {
+        /// Project path
+        path: PathBuf,
     },
 
     /// Generate shell completions
@@ -258,6 +296,21 @@ async fn main() -> Result<()> {
         }
         Commands::Reset { confirm } => {
             cmd_reset(confirm).await
+        }
+        Commands::Delete { id } => {
+            cmd_delete(id).await
+        }
+        Commands::SearchCode { query, limit } => {
+            cmd_search_code(query, limit).await
+        }
+        Commands::SearchDb { query, limit } => {
+            cmd_search_db(query, limit).await
+        }
+        Commands::Unindex { path } => {
+            cmd_unindex(path).await
+        }
+        Commands::IsIndexed { path } => {
+            cmd_is_indexed(path).await
         }
         Commands::Complete { shell } => {
             Cli::generate_completions(shell)

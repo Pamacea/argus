@@ -6,3 +6,6 @@ dist/
 data/
 *.db
 *.ldb
+.smite/
+.ex-g-se/
+.claude/

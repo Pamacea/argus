@@ -133,6 +133,14 @@ impl Transaction {
         self.metadata = Some(meta);
         self
     }
+
+    /// Add category to the transaction
+    pub fn with_category(mut self, category: impl Into<String>) -> Self {
+        let mut meta = self.metadata.unwrap_or_default();
+        meta.category = Some(category.into());
+        self.metadata = Some(meta);
+        self
+    }
 }
 
 /// Memory statistics

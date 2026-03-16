@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.4] - 2026-03-16
+
+### ✨ New Features
+
+**New Commands:**
+- **`argus delete <id>`** - Delete a specific transaction by ID
+- **`argus search-code <query>`** - Search in indexed code files
+- **`argus search-db <query>`** - Advanced FTS5 search in database
+- **`argus unindex <path>`** - Remove a project from the index
+- **`argus is-indexed <path>`** - Check if a project is indexed
+
+**Configuration Management:**
+- **`argus config get <key>`** - Get a configuration value
+- **`argus config set <key> <value>`** - Set a configuration value
+- **`argus config list`** - List all configuration
+
+**Improved Builder Pattern:**
+- Added `Transaction::with_category()` - Set transaction category
+- Enhanced `cmd_remember` to use builder pattern fluently
+- Configuration now persists to `~/.argus/config.toml`
+
+### 🔧 Code Quality
+
+**Reduced Warnings:**
+- **Before:** 23 warnings (dead code, unused imports)
+- **After:** 2 warnings (public API exports only)
+- **Removed:** All dead code, unused legacy functions
+- **Fixed:** All variable naming issues
+
+**Refactoring:**
+- Removed legacy `cmd_init` (replaced by `cmd_init_v2`)
+- Removed legacy `cmd_install` (replaced by `cmd_init_v2`)
+- Implemented full `ProjectIndexer` with file scanning
+- Implemented `SearchEngine` with SQLite FTS5
+
+### 📁 Technical Details
+
+**Added Files:**
+- `src/core/search.rs` - FTS5 search engine implementation
+- Enhanced `src/core/index.rs` - Complete project indexing
+
+**Modified Files:**
+- `src/main.rs` - New commands: Delete, SearchCode, SearchDb, Unindex, IsIndexed
+- `src/cli/commands.rs` - Implemented all new command handlers
+- `src/storage/models.rs` - Added `with_category()` builder method
+
+**API Additions:**
+- `MemoryEngine::delete()` - Delete by ID
+- `ProjectIndexer::search()` - Code search
+- `ProjectIndexer::is_indexed()` - Check index status
+- `ProjectIndexer::unindex()` - Remove from index
+- `SearchEngine::search()` - FTS5 ranked search
+- `Transaction::with_category()` - Builder method
+
+---
+
 ## [0.8.3] - 2026-03-16
 
 ### 🐛 Bug Fixes - Critical Hook Errors Fixed
