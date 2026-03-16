@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.3] - 2026-03-16
+
+### 🐛 Bug Fixes - Critical Hook Errors Fixed
+
+**ES Module vs CommonJS Issue:**
+- **Fixed:** Hooks renamed from `.mjs` to `.cjs` to use CommonJS instead of ES modules
+- **Root Cause:** `.mjs` files cannot use `require()` and `module.exports` - they need `import`/`export`
+- **Solution:** Use `.cjs` extension for CommonJS compatibility with `require()`
+- **Impact:** Hooks now execute correctly on all platforms
+
+**Windows Hook Path Issue:**
+- **Fixed:** `~` (tilde) paths don't work on Windows in settings.json
+- **Fixed:** Hook commands now use absolute paths (e.g., `C:/Users/Yanis/.claude/hooks/`)
+- **Root Cause:** Node.js doesn't expand `~` when executing hooks on Windows
+- **Solution:** Generate absolute paths during hook installation
+
+**Asynchronous Hook Timing:**
+- **Fixed:** SessionStart hook now uses `spawnSync` instead of `spawn` for reliable execution
+- **Fixed:** PreToolUse hook now uses `spawnSync` to ensure memory search completes before tool execution
+- **Fixed:** Added proper error handling with try-catch to prevent hook failures from breaking workflow
+- **Improved:** Optional chaining (`context?.workingDir`) to prevent undefined errors
+
+**Enhanced Reliability:**
+- Added `--json` flag to recall command for structured output
+- Added prompt length validation (skip if < 5 chars)
+- Added RTK command filtering to skip noisy commands
+- Enhanced tag detection with "create" keyword
+
+### 🔧 Technical Details
+
+**Modified Files:**
+- `src/hooks/mod.rs` - Updated to use `.cjs` extension and absolute paths
+- `~/.claude/hooks/argus-session.cjs` - CommonJS module, spawnSync, proper error handling
+- `~/.claude/hooks/argus-pre-tool.cjs` - CommonJS module, spawnSync, better validation
+- `~/.claude/hooks/argus-post-tool.cjs` - CommonJS module, enhanced tag detection, RTK filtering
+- `~/.claude/settings.json` - Paths changed from `~/.claude/hooks/*.mjs` to `C:/Users/Yanis/.claude/hooks/*.cjs`
+
+**File Extension Change:**
+```
+Before:  argus-session.mjs  ❌ ES Module with require() - Error!
+After:   argus-session.cjs  ✅ CommonJS with require() - Works!
+```
+
+**settings.json Before:**
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "command": "node ~/.claude/hooks/argus-session.mjs"  // ❌ Doesn't work on Windows
+      }]
+    }]
+  }
+}
+```
+
+**settings.json After:**
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "command": "node C:/Users/Yanis/.claude/hooks/argus-session.cjs"  // ✅ Absolute path + .cjs
+      }]
+    }]
+  }
+}
+```
+
+### 📝 Migration
+
+**For current users:**
+```bash
+# Just restart Claude Code - hooks are already updated
+# The next install will use absolute paths automatically
+```
+
+**For developers:**
+```bash
+# Rebuild with fixes
+cargo install --path . --force
+
+# Reinstall hooks (will use absolute paths now)
+argus init -g --uninstall
+argus init -g
+```
+
+---
+
 ## [0.8.2] - 2026-03-16
 
 ### 🎉 Major Architecture Change - RTK-Style Hooks
