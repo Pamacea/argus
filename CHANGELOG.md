@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.5] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+**Hooks Integration:**
+- Fixed `--json` flag missing in `argus recall` and `argus search-db`
+- Hooks now correctly parse JSON output for memory consultation
+- Added automatic `@ARGUS.md` reference injection to personal `CLAUDE.md`
+- Improved cleanup: removes `@ARGUS.md` reference on uninstall
+
+**Init Command:**
+- `argus init -g` now adds `@ARGUS.md` to `~/.claude/CLAUDE.md` (if not present)
+- Prevents duplicate references on repeated init
+
+### 🔧 Technical Details
+
+**Added Flags:**
+- `--json` on `argus recall` - Output results as JSON array for hooks
+- `--json` on `argus search-db` - Output FTS5 results as JSON array
+
+**Changed Behavior:**
+- `cmd_init_v2()` now injects `@ARGUS.md` reference into personal CLAUDE.md
+- `cmd_init_v2()` cleanup now removes `@ARGUS.md` reference on uninstall
+
+---
+
 ## [0.8.4] - 2026-03-16
 
 ### ✨ New Features

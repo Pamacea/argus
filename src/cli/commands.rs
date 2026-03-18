@@ -31,6 +31,21 @@ pub async fn cmd_init_v2(global: bool, show: bool, uninstall: bool, no_rules: bo
                 fs::remove_file(&rules_path)?;
                 crate::cli::output::success(&format!("Removed: {}", rules_path.display()));
             }
+
+            // Remove @ARGUS.md reference from personal CLAUDE.md
+            let claude_md_path = home.join(".claude").join("CLAUDE.md");
+            if claude_md_path.exists() {
+                let content = fs::read_to_string(&claude_md_path)?;
+                // Remove @ARGUS.md line
+                let updated = content.lines()
+                    .filter(|line| !line.ends_with("@ARGUS.md") && *line != "@ARGUS.md")
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if updated != content {
+                    fs::write(&claude_md_path, updated)?;
+                    crate::cli::output::success(&format!("Removed @ARGUS.md reference from {}", claude_md_path.display()));
+                }
+            }
         }
 
         crate::cli::output::success("ARGUS uninstalled successfully");
@@ -140,6 +155,48 @@ argus init -g --uninstall
 
         fs::write(&rules_path, rules_content)?;
         crate::cli::output::success(&format!("Injected Claude Code rules: {}", rules_path.display()));
+
+        // Also add @ARGUS.md reference to personal CLAUDE.md
+        let claude_md_path = home.join(".claude").join("CLAUDE.md");
+        if claude_md_path.exists() {
+            let content = fs::read_to_string(&claude_md_path)?;
+            // Check if @ARGUS.md is already referenced
+            if !content.contains("@ARGUS.md") {
+                // Add the reference in the references section
+                // Look for existing @file.md references and add there
+                if content.contains("@") && content.contains(".md") {
+                    // Find the last @file.md reference and add after it
+                    let lines: Vec<&str> = content.lines().collect();
+                    let mut last_ref_idx = 0;
+                    for (i, line) in lines.iter().enumerate() {
+                        if line.trim().starts_with("@") && line.contains(".md") {
+                            last_ref_idx = i;
+                        }
+                    }
+                    if last_ref_idx > 0 {
+                        let mut updated_lines = lines.clone();
+                        // Insert after the last reference
+                        updated_lines.insert(last_ref_idx + 1, "@ARGUS.md");
+                        let updated = updated_lines.join("\n");
+                        fs::write(&claude_md_path, updated)?;
+                        crate::cli::output::success(&format!("Added @ARGUS.md reference to {}", claude_md_path.display()));
+                    }
+                } else {
+                    // No references section, add at the end before version line
+                    let updated = if content.contains("*Version:") || content.contains("*Version:") {
+                        // Insert before the version line
+                        content.replacen("*Version:", "@ARGUS.md\n\n*Version:", 1)
+                    } else {
+                        // Append at the end
+                        format!("{}\n\n@ARGUS.md\n", content)
+                    };
+                    fs::write(&claude_md_path, updated)?;
+                    crate::cli::output::success(&format!("Added @ARGUS.md reference to {}", claude_md_path.display()));
+                }
+            }
+        } else {
+            crate::cli::output::info(&format!("Personal CLAUDE.md not found at {}, skipping reference injection", claude_md_path.display()));
+        }
     } else {
         crate::cli::output::info("Skipped rules injection (--no-rules)");
     }
@@ -194,10 +251,27 @@ pub async fn cmd_remember(description: String, tags: Option<String>, category: O
 }
 
 /// Recall/search transactions
-pub async fn cmd_recall(query: String, limit: usize, full: bool) -> Result<()> {
+pub async fn cmd_recall(query: String, limit: usize, full: bool, json: bool) -> Result<()> {
     let memory = MemoryEngine::new().await?;
 
     let results = memory.recall(&query, limit).await?;
+
+    if json {
+        // JSON output for hooks
+        let json_results: Vec<serde_json::Value> = results.iter().map(|tx| {
+            serde_json::json!({
+                "id": tx.id,
+                "prompt": tx.prompt,
+                "summary": tx.metadata.as_ref().and_then(|m| m.summary.clone()),
+                "tags": tx.metadata.as_ref().and_then(|m| Some(m.tags.clone())).unwrap_or_default(),
+                "category": tx.metadata.as_ref().and_then(|m| m.category.clone()),
+                "created_at": tx.created_at.map(|d| d.to_rfc3339()),
+            })
+        }).collect();
+
+        println!("{}", serde_json::to_string(&json_results)?);
+        return Ok(());
+    }
 
     if results.is_empty() {
         print_info(&format!("No results found for: {}", cyan(&query)));
@@ -476,10 +550,26 @@ pub async fn cmd_search_code(query: String, limit: usize) -> Result<()> {
 }
 
 /// Search in the database using FTS5 (more powerful than recall)
-pub async fn cmd_search_db(query: String, limit: usize) -> Result<()> {
+pub async fn cmd_search_db(query: String, limit: usize, json: bool) -> Result<()> {
     let engine = crate::core::search::SearchEngine::new().await?;
 
     let results = engine.search(&query, limit).await?;
+
+    if json {
+        // JSON output for hooks
+        let json_results: Vec<serde_json::Value> = results.iter().map(|r| {
+            serde_json::json!({
+                "id": r.transaction_id,
+                "prompt": r.prompt,
+                "summary": r.summary,
+                "created_at": r.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                "score": r.score,
+            })
+        }).collect();
+
+        println!("{}", serde_json::to_string(&json_results)?);
+        return Ok(());
+    }
 
     if results.is_empty() {
         print_info(&format!("No results found for: {}", cyan(&query)));

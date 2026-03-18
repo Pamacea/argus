@@ -18,7 +18,7 @@ use cli::commands::*;
 /// ARGUS - Omniscient memory sentinel for Claude Code
 #[derive(Parser)]
 #[command(name = "argus")]
-#[command(version = "0.8.4")]
+#[command(version = "0.8.5")]
 #[command(about = "ARGUS maintains semantic memory of your Claude Code sessions", long_about = None)]
 #[command(author = "Yanis")]
 #[command(long_about = "ARGUS is a memory system that helps you remember past actions and \
@@ -79,6 +79,10 @@ enum Commands {
         /// Show full output including context
         #[arg(short, long)]
         full: bool,
+
+        /// Output as JSON (for hook integration)
+        #[arg(long)]
+        json: bool,
     },
 
     /// List recent transactions
@@ -155,6 +159,10 @@ enum Commands {
         /// Maximum number of results
         #[arg(short, long, default_value = "10")]
         limit: usize,
+
+        /// Output as JSON (for hook integration)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Unindex a project
@@ -273,8 +281,8 @@ async fn main() -> Result<()> {
         Commands::Remember { description, tags, category } => {
             cmd_remember(description, tags, category).await
         }
-        Commands::Recall { query, limit, full } => {
-            cmd_recall(query, limit, full).await
+        Commands::Recall { query, limit, full, json } => {
+            cmd_recall(query, limit, full, json).await
         }
         Commands::List { limit } => {
             cmd_list(limit).await
@@ -303,8 +311,8 @@ async fn main() -> Result<()> {
         Commands::SearchCode { query, limit } => {
             cmd_search_code(query, limit).await
         }
-        Commands::SearchDb { query, limit } => {
-            cmd_search_db(query, limit).await
+        Commands::SearchDb { query, limit, json } => {
+            cmd_search_db(query, limit, json).await
         }
         Commands::Unindex { path } => {
             cmd_unindex(path).await
