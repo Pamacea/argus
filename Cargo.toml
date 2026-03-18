@@ -1,6 +1,6 @@
 [package]
 name = "argus-tool"
-version = "0.8.6"
+version = "0.8.7"
 edition = "2021"
 description = "ARGUS - Omniscient memory sentinel for Claude Code"
 authors = ["Yanis"]

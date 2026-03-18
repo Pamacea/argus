@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.7] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+**Hooks - Broken Hook Protocol (Critical):**
+- Hooks exported functions (`module.exports = { sessionStart }`) but never called them
+- Claude Code hooks receive JSON on **stdin** and must read it — the old hooks ignored stdin entirely
+- Every hook invocation spawned Node, loaded the module, and exited immediately — zero effect
+- `lastConsultation` anti-spam assumed module state persists across invocations (it doesn't — each hook is a new process)
+
+**Hooks - `shell: true` Broke Arguments:**
+- `spawnSync('argus', ['remember', 'Modified foo.rs'], { shell: true })` split arguments at spaces
+- `argus` received `Modified` and `foo.rs` as separate args → `unexpected argument` error
+- Changed all `spawnSync` calls to `shell: false`
+
+**`argus init -g` Overwrote Other Hooks:**
+- `update_settings_json()` used `insert()` on `SessionStart`/`PreToolUse`/`PostToolUse` keys
+- This replaced the entire array, deleting RTK, Aureus, and Oparryd hooks
+- Now merges: removes only ARGUS entries, then appends, preserving all other hooks
+
+**`argus init -g --uninstall` Deleted Other Hooks:**
+- `remove_hooks_from_settings()` removed entire hook type keys containing "argus"
+- Now filters only ARGUS entries from each array, preserving other tools' hooks
+
+### 🔧 Technical Details
+
+**Changed:**
+- All 3 hooks rewritten to read stdin JSON and call logic directly (no `module.exports`)
+- `spawnSync` uses `shell: false` for correct argument passing
+- `update_settings_json()` merges instead of overwriting hook arrays
+- `remove_hooks_from_settings()` filters entries instead of removing keys
+
+---
+
 ## [0.8.6] - 2026-03-18
 
 ### 🐛 Bug Fixes

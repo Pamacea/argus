@@ -171,67 +171,78 @@ impl HooksInstaller {
 /**
  * ARGUS SessionStart Hook
  * Initializes ARGUS at the start of each Claude Code session
+ *
+ * Claude Code hooks receive JSON on stdin and output on stdout.
  */
 
-const { spawnSync } = require('child_process');
+const { spawnSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-async function sessionStart(context) {
-    const workingDir = context?.workingDir || process.cwd();
-    const platform = context?.platform || process.platform;
+function main() {
+    let inputData = '';
 
-    console.log('[ARGUS] 🦅 Sentinelle Omnisciente');
-    console.log('[ARGUS] Working dir:', workingDir);
-
-    // Verify ARGUS CLI is available (synchronous check)
-    try {
-        const check = spawnSync('argus', ['--version'], {
-            stdio: 'pipe',
-            timeout: 5000,
-            shell: true
-        });
-
-        if (check.status === 0) {
-            console.log('[ARGUS] ✓ CLI ready - Memory capture enabled');
-            console.log('[ARGUS] → Use: argus recall "query"');
-        } else {
-            console.log('[ARGUS] ⚠ CLI not found - Install: cargo install argus-tool');
-        }
-    } catch (err) {
-        // Silent fail on check
-    }
-
-    // Auto-index current project if needed (background to not block startup)
-    const argusDir = path.join(require('os').homedir(), '.argus');
-    const indexFile = path.join(argusDir, 'index.json');
-
-    let shouldIndex = true;
-    try {
-        if (fs.existsSync(indexFile)) {
-            const stats = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
-            const lastIndexed = stats.lastIndexed || 0;
-            const hoursSince = (Date.now() - lastIndexed) / (1000 * 60 * 60);
-            shouldIndex = hoursSince > 3; // Re-index every 3 hours
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { inputData += chunk; });
+    process.stdin.on('end', () => {
+        let context = {};
+        try {
+            context = JSON.parse(inputData);
+        } catch (e) {
+            // No context provided, that's OK for SessionStart
         }
 
-        if (shouldIndex) {
-            console.log('[ARGUS] → Indexing project...');
-            // Run in background with spawn to avoid blocking
-            const { spawn } = require('child_process');
-            const index = spawn('argus index', [], {
-                stdio: 'ignore',
-                shell: true,
-                detached: true
+        const workingDir = context?.working_directory || process.cwd();
+
+        // Verify ARGUS CLI is available
+        try {
+            const check = spawnSync('argus', ['--version'], {
+                stdio: 'pipe',
+                timeout: 5000,
+                shell: false
             });
-            index.unref();
+
+            if (check.status !== 0) {
+                process.stderr.write('[ARGUS] CLI not found\n');
+                process.exit(0);
+                return;
+            }
+        } catch (err) {
+            process.exit(0);
+            return;
         }
-    } catch (err) {
-        // Silent fail on index check
-    }
+
+        // Auto-index current project if needed (background)
+        const argusDir = path.join(require('os').homedir(), '.argus');
+        const indexFile = path.join(argusDir, 'index.json');
+
+        let shouldIndex = true;
+        try {
+            if (fs.existsSync(indexFile)) {
+                const stats = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+                const lastIndexed = stats.lastIndexed || 0;
+                const hoursSince = (Date.now() - lastIndexed) / (1000 * 60 * 60);
+                shouldIndex = hoursSince > 3;
+            }
+
+            if (shouldIndex) {
+                const index = spawn('argus', ['index'], {
+                    stdio: 'ignore',
+                    shell: false,
+                    detached: true,
+                    cwd: workingDir
+                });
+                index.unref();
+            }
+        } catch (err) {
+            // Silent fail
+        }
+
+        process.exit(0);
+    });
 }
 
-module.exports = { sessionStart };
+main();
 "#;
 
         fs::write(self.hooks_dir.join("argus-session.cjs"), hook)
@@ -255,61 +266,60 @@ module.exports = { sessionStart };
         let hook = r#"#!/usr/bin/env node
 /**
  * ARGUS PreToolUse Hook
- * Intercepts Explore/CreateTeam and forces ARGUS consultation
+ * Consults ARGUS memory before Explore/CreateTeam/Agent/Plan
+ *
+ * Claude Code hooks receive JSON on stdin:
+ * { "session_id", "tool_name", "tool_input", "working_directory" }
  */
 
 const { spawnSync } = require('child_process');
 
-// Track last consultation (module-level state persists across hook invocations)
-let lastConsultation = null;
-const CONSULTATION_TTL = 5 * 60 * 1000; // 5 minutes
+function main() {
+    let inputData = '';
 
-async function preToolUse(context, toolName, toolInput) {
-    // Tools that require ARGUS consultation
-    const memoryTools = ['Explore', 'CreateTeam', 'Task', 'Agent', 'Plan'];
-
-    if (!memoryTools.includes(toolName)) {
-        return; // Not a memory tool
-    }
-
-    // Check if recently consulted
-    const now = Date.now();
-    if (lastConsultation && (now - lastConsultation) < CONSULTATION_TTL) {
-        return; // Still valid, skip
-    }
-
-    // Extract prompt from tool input
-    const prompt = toolInput?.prompt || toolInput?.description || toolInput?.query || '';
-    if (!prompt || prompt.length < 5) {
-        return; // No meaningful prompt
-    }
-
-    console.log(`[ARGUS] 🔍 Checking memory before ${toolName}...`);
-
-    // Escape prompt for shell (handle quotes and special chars)
-    const promptEscaped = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-
-    // Search ARGUS memory (synchronous for reliability)
-    try {
-        const argus = spawnSync(`argus recall "${promptEscaped}" --limit 5 --json`, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            timeout: 5000,
-            shell: true,
-            encoding: 'utf-8'
-        });
-
-        if (argus.status === 0 && argus.stdout && argus.stdout.trim()) {
-            const output = argus.stdout.trim();
-            console.log('[ARGUS] Found relevant context:');
-            console.log(output);
-            lastConsultation = Date.now();
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { inputData += chunk; });
+    process.stdin.on('end', () => {
+        let context = {};
+        try {
+            context = JSON.parse(inputData);
+        } catch (e) {
+            process.exit(0);
+            return;
         }
-    } catch (err) {
-        // Silent fail - don't break the workflow
-    }
+
+        const toolName = context?.tool_name || '';
+        const toolInput = context?.tool_input || {};
+
+        // Extract a meaningful query from tool input
+        const prompt = toolInput?.prompt || toolInput?.description || toolInput?.query || '';
+        if (!prompt || prompt.length < 5) {
+            process.exit(0);
+            return;
+        }
+
+        // Search ARGUS memory
+        try {
+            const argus = spawnSync('argus', ['recall', prompt, '--limit', '3', '--json'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+                timeout: 5000,
+                shell: false,
+                encoding: 'utf-8'
+            });
+
+            if (argus.status === 0 && argus.stdout && argus.stdout.trim()) {
+                process.stderr.write(`[ARGUS] Memory context for ${toolName}:\n`);
+                process.stderr.write(argus.stdout.trim() + '\n');
+            }
+        } catch (err) {
+            // Silent fail
+        }
+
+        process.exit(0);
+    });
 }
 
-module.exports = { preToolUse };
+main();
 "#;
 
         fs::write(self.hooks_dir.join("argus-pre-tool.cjs"), hook)
@@ -333,95 +343,102 @@ module.exports = { preToolUse };
         let hook = r#"#!/usr/bin/env node
 /**
  * ARGUS PostToolUse Hook
- * Records successful actions to memory
+ * Records successful actions to ARGUS memory
+ *
+ * Claude Code hooks receive JSON on stdin:
+ * { "session_id", "tool_name", "tool_input", "tool_output", "working_directory" }
  */
 
 const { spawnSync } = require('child_process');
 
-async function postToolUse(context, toolName, toolInput, result) {
-    // Tools to record
-    const recordableTools = ['Edit', 'Write', 'Explore', 'CreateTeam', 'Bash'];
+function main() {
+    let inputData = '';
 
-    if (!recordableTools.includes(toolName)) {
-        return;
-    }
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { inputData += chunk; });
+    process.stdin.on('end', () => {
+        let context = {};
+        try {
+            context = JSON.parse(inputData);
+        } catch (e) {
+            process.exit(0);
+            return;
+        }
 
-    // Skip failed operations
-    if (result?.error) {
-        return;
-    }
+        const toolName = context?.tool_name || '';
+        const toolInput = context?.tool_input || {};
 
-    // Build description
-    let description = '';
-    let category = 'action';
-    let tags = [];
+        // Build description based on tool
+        let description = '';
+        let category = 'action';
+        let tags = [];
 
-    switch (toolName) {
-        case 'Edit':
-            description = `Modified ${toolInput?.file_path || 'unknown file'}`;
-            category = 'edit';
-            break;
-        case 'Write':
-            description = `Created ${toolInput?.file_path || 'unknown file'}`;
-            category = 'create';
-            tags.push('new-file');
-            break;
-        case 'Explore':
-            description = `Explored: ${toolInput?.prompt || toolInput?.query || 'unknown'}`;
-            category = 'explore';
-            break;
-        case 'CreateTeam':
-            description = `Created team: ${toolInput?.team_name || 'unknown'}`;
-            category = 'team';
-            tags.push('collaboration');
-            break;
-        case 'Bash':
-            const cmd = toolInput?.command || '';
-            // Skip noisy commands
-            if (/^(git status|git log|ls|dir|pwd|rtk )/.test(cmd)) {
-                return;
+        switch (toolName) {
+            case 'Edit':
+                description = `Modified ${toolInput?.file_path || 'unknown file'}`;
+                category = 'edit';
+                break;
+            case 'Write':
+                description = `Created ${toolInput?.file_path || 'unknown file'}`;
+                category = 'create';
+                tags.push('new-file');
+                break;
+            case 'Explore':
+                description = `Explored: ${toolInput?.prompt || toolInput?.query || 'unknown'}`;
+                category = 'explore';
+                break;
+            case 'CreateTeam':
+                description = `Created team: ${toolInput?.team_name || 'unknown'}`;
+                category = 'team';
+                tags.push('collaboration');
+                break;
+            case 'Bash': {
+                const cmd = toolInput?.command || '';
+                // Skip noisy/read-only commands
+                if (/^(git status|git log|git diff|ls|dir|pwd|rtk |cat |head |tail |argus )/.test(cmd)) {
+                    process.exit(0);
+                    return;
+                }
+                description = `Executed: ${cmd.substring(0, 80)}${cmd.length > 80 ? '...' : ''}`;
+                category = 'command';
+                break;
             }
-            description = `Executed: ${cmd.substring(0, 60)}${cmd.length > 60 ? '...' : ''}`;
-            category = 'command';
-            break;
-    }
+            default:
+                process.exit(0);
+                return;
+        }
 
-    // Auto-detect tags
-    const descLower = description.toLowerCase();
-    if (descLower.includes('fix') || descLower.includes('bug')) {
-        tags.push('bugfix');
-    }
-    if (descLower.includes('add') || descLower.includes('implement') || descLower.includes('create')) {
-        tags.push('feature');
-    }
-    if (descLower.includes('refactor') || descLower.includes('clean') || descLower.includes('simplify')) {
-        tags.push('refactor');
-    }
-    if (descLower.includes('test')) {
-        tags.push('test');
-    }
+        if (!description) {
+            process.exit(0);
+            return;
+        }
 
-    // Build command line with proper escaping
-    const descriptionEscaped = description.replace(/"/g, '\\"');
-    let cmdLine = `argus remember "${descriptionEscaped}"`;
-    if (tags.length > 0) {
-        cmdLine += ` --tags ${tags.join(',')}`;
-    }
-    cmdLine += ` --category ${category}`;
+        // Auto-detect tags from description
+        const descLower = description.toLowerCase();
+        if (descLower.includes('fix') || descLower.includes('bug')) tags.push('bugfix');
+        if (descLower.includes('test')) tags.push('test');
 
-    // Save to ARGUS (synchronous for reliability)
-    try {
-        spawnSync(cmdLine, {
-            stdio: 'ignore',
-            shell: true,
-            timeout: 5000
-        });
-    } catch (err) {
-        // Silent fail - don't break the workflow
-    }
+        // Save to ARGUS
+        try {
+            const args = ['remember', description, '--category', category];
+            if (tags.length > 0) {
+                args.push('--tags', tags.join(','));
+            }
+
+            spawnSync('argus', args, {
+                stdio: 'ignore',
+                shell: false,
+                timeout: 5000
+            });
+        } catch (err) {
+            // Silent fail
+        }
+
+        process.exit(0);
+    });
 }
 
-module.exports = { postToolUse };
+main();
 "#;
 
         fs::write(self.hooks_dir.join("argus-post-tool.cjs"), hook)
@@ -493,7 +510,7 @@ Toutes les données sont stockées localement :
         Ok(())
     }
 
-    /// Update settings.json to register hooks (RTK-style)
+    /// Update settings.json to register hooks (RTK-style, merge with existing)
     fn update_settings_json(&self) -> Result<()> {
         let settings_path = self.claude_dir.join("settings.json");
 
@@ -520,7 +537,6 @@ Toutes les données sont stockées localement :
             settings["hooks"] = serde_json::json!({});
         }
 
-        // Add SessionStart hook
         let hooks_obj = settings["hooks"].as_object_mut().unwrap();
 
         // Use absolute path for reliability (especially on Windows where ~ doesn't expand)
@@ -528,50 +544,52 @@ Toutes les données sont stockées localement :
             .to_string_lossy()
             .replace('\\', "/"); // Normalize path separators
 
-        // SessionStart
-        let session_start = serde_json::json!([
-            {
+        // Define ARGUS hook entries
+        let argus_hooks = vec![
+            ("SessionStart", serde_json::json!({
                 "matcher": "*",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": format!("node {}/argus-session.cjs", hooks_dir_str),
-                        "timeout": 10000
-                    }
-                ]
-            }
-        ]);
-        hooks_obj.insert("SessionStart".to_string(), session_start);
-
-        // PreToolUse - for Explore/CreateTeam interception
-        let pre_tool = serde_json::json!([
-            {
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("node {}/argus-session.cjs", hooks_dir_str),
+                    "timeout": 10000
+                }]
+            })),
+            ("PreToolUse", serde_json::json!({
                 "matcher": "Explore|CreateTeam|Task|Agent|Plan",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": format!("node {}/argus-pre-tool.cjs", hooks_dir_str),
-                        "timeout": 5000
-                    }
-                ]
-            }
-        ]);
-        hooks_obj.insert("PreToolUse".to_string(), pre_tool);
-
-        // PostToolUse - for recording actions
-        let post_tool = serde_json::json!([
-            {
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("node {}/argus-pre-tool.cjs", hooks_dir_str),
+                    "timeout": 5000
+                }]
+            })),
+            ("PostToolUse", serde_json::json!({
                 "matcher": "Edit|Write|Explore|CreateTeam|Bash",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": format!("node {}/argus-post-tool.cjs", hooks_dir_str),
-                        "timeout": 5000
-                    }
-                ]
-            }
-        ]);
-        hooks_obj.insert("PostToolUse".to_string(), post_tool);
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("node {}/argus-post-tool.cjs", hooks_dir_str),
+                    "timeout": 5000
+                }]
+            })),
+        ];
+
+        for (hook_type, argus_entry) in argus_hooks {
+            // Get or create the array for this hook type
+            let entries = hooks_obj
+                .entry(hook_type)
+                .or_insert_with(|| serde_json::json!([]));
+
+            let arr = entries.as_array_mut()
+                .ok_or_else(|| anyhow::anyhow!("{} is not an array in settings.json", hook_type))?;
+
+            // Remove any existing ARGUS entries (to avoid duplicates on re-init)
+            arr.retain(|entry| {
+                let json_str = entry.to_string();
+                !json_str.contains("argus-")
+            });
+
+            // Append the new ARGUS entry
+            arr.push(argus_entry);
+        }
 
         // Write updated settings
         let json = serde_json::to_string_pretty(&settings)?;
@@ -583,7 +601,7 @@ Toutes les données sont stockées localement :
         Ok(())
     }
 
-    /// Remove ARGUS hooks from settings.json
+    /// Remove ARGUS hooks from settings.json (preserves other hooks)
     fn remove_hooks_from_settings(&self) -> Result<()> {
         let settings_path = self.claude_dir.join("settings.json");
 
@@ -594,13 +612,16 @@ Toutes les données sont stockées localement :
         let content = fs::read_to_string(&settings_path)?;
         let mut settings: serde_json::Value = serde_json::from_str(&content)?;
 
-        // Remove hook registrations that contain "argus"
+        // Remove only ARGUS entries from each hook type array (preserve others)
         if let Some(hooks_obj) = settings.get_mut("hooks").and_then(|v| v.as_object_mut()) {
-            hooks_obj.retain(|_key, value| {
-                // Keep hooks that don't reference argus
-                let json_str = value.to_string();
-                !json_str.contains("argus")
-            });
+            for (_key, value) in hooks_obj.iter_mut() {
+                if let Some(arr) = value.as_array_mut() {
+                    arr.retain(|entry| {
+                        let json_str = entry.to_string();
+                        !json_str.contains("argus-")
+                    });
+                }
+            }
         }
 
         // Remove old enabledPlugins entry if exists
@@ -611,7 +632,7 @@ Toutes les données sont stockées localement :
         let json = serde_json::to_string_pretty(&settings)?;
         fs::write(&settings_path, json)?;
 
-        println!("  → Removed hooks from settings.json");
+        println!("  → Removed ARGUS hooks from settings.json");
 
         Ok(())
     }
