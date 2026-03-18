@@ -18,7 +18,7 @@ use cli::commands::*;
 /// ARGUS - Omniscient memory sentinel for Claude Code
 #[derive(Parser)]
 #[command(name = "argus")]
-#[command(version = "0.8.5")]
+#[command(version = "0.8.6")]
 #[command(about = "ARGUS maintains semantic memory of your Claude Code sessions", long_about = None)]
 #[command(author = "Yanis")]
 #[command(long_about = "ARGUS is a memory system that helps you remember past actions and \

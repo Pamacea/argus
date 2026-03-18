@@ -202,7 +202,7 @@ async function sessionStart(context) {
         // Silent fail on check
     }
 
-    // Auto-index current project if needed
+    // Auto-index current project if needed (background to not block startup)
     const argusDir = path.join(require('os').homedir(), '.argus');
     const indexFile = path.join(argusDir, 'index.json');
 
@@ -216,13 +216,13 @@ async function sessionStart(context) {
         }
 
         if (shouldIndex) {
-            console.log('[ARGUS] → Indexing project (background)...');
-            // Fork instead of spawn detached for better reliability
+            console.log('[ARGUS] → Indexing project...');
+            // Run in background with spawn to avoid blocking
             const { spawn } = require('child_process');
-            const index = spawn('argus', ['index'], {
+            const index = spawn('argus index', [], {
                 stdio: 'ignore',
-                detached: true,
-                shell: true
+                shell: true,
+                detached: true
             });
             index.unref();
         }
@@ -286,9 +286,12 @@ async function preToolUse(context, toolName, toolInput) {
 
     console.log(`[ARGUS] 🔍 Checking memory before ${toolName}...`);
 
+    // Escape prompt for shell (handle quotes and special chars)
+    const promptEscaped = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+
     // Search ARGUS memory (synchronous for reliability)
     try {
-        const argus = spawnSync('argus', ['recall', prompt, '--limit', '5', '--json'], {
+        const argus = spawnSync(`argus recall "${promptEscaped}" --limit 5 --json`, {
             stdio: ['ignore', 'pipe', 'pipe'],
             timeout: 5000,
             shell: true,
@@ -333,7 +336,7 @@ module.exports = { preToolUse };
  * Records successful actions to memory
  */
 
-const { spawn } = require('child_process');
+const { spawnSync } = require('child_process');
 
 async function postToolUse(context, toolName, toolInput, result) {
     // Tools to record
@@ -398,20 +401,21 @@ async function postToolUse(context, toolName, toolInput, result) {
         tags.push('test');
     }
 
-    // Build args
-    const args = ['remember', description];
+    // Build command line with proper escaping
+    const descriptionEscaped = description.replace(/"/g, '\\"');
+    let cmdLine = `argus remember "${descriptionEscaped}"`;
     if (tags.length > 0) {
-        args.push('--tags', tags.join(','));
+        cmdLine += ` --tags ${tags.join(',')}`;
     }
-    args.push('--category', category);
+    cmdLine += ` --category ${category}`;
 
-    // Save to ARGUS (fire and forget - don't wait)
+    // Save to ARGUS (synchronous for reliability)
     try {
-        spawn('argus', args, {
+        spawnSync(cmdLine, {
             stdio: 'ignore',
-            detached: true,
-            shell: true
-        }).unref();
+            shell: true,
+            timeout: 5000
+        });
     } catch (err) {
         // Silent fail - don't break the workflow
     }

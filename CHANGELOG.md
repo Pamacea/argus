@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.6] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+**Hooks - Critical Fix:**
+- Fixed shell escaping in hooks - arguments with spaces now work correctly
+- Changed from `spawn` + `detached` to `spawnSync` for reliable execution
+- Built command line with proper quote escaping for descriptions
+- PreToolUse hook now properly escapes prompt queries
+
+**Before:** "test avec espaces" → interpreted as 3 separate arguments → failed
+**After:** "test avec espaces" → properly escaped → works!
+
+### 🔧 Technical Details
+
+**Changed:**
+- `argus-post-tool.cjs` - Uses shell command with escaped description
+- `argus-pre-tool.cjs` - Uses shell command with escaped prompt
+- `argus-session.cjs` - Simplified index command
+
+---
+
 ## [0.8.5] - 2026-03-18
 
 ### 🐛 Bug Fixes
