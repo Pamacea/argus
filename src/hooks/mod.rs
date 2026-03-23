@@ -263,63 +263,60 @@ main();
 
     /// Write pre-tool-use hook
     fn write_pre_tool_hook(&self) -> Result<()> {
-        let hook = r#"#!/usr/bin/env node
-/**
+        let hook = r#"/**
  * ARGUS PreToolUse Hook
  * Consults ARGUS memory before Explore/CreateTeam/Agent/Plan
- *
- * Claude Code hooks receive JSON on stdin:
- * { "session_id", "tool_name", "tool_input", "working_directory" }
  */
 
 const { spawnSync } = require('child_process');
 
-function main() {
-    let inputData = '';
+function preToolUse(context, toolName, toolInput) {
+    // Only run for specific tools
+    const targetTools = ['Explore', 'CreateTeam', 'Task', 'Agent', 'Plan'];
+    if (!targetTools.includes(toolName)) {
+        return;
+    }
 
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => { inputData += chunk; });
-    process.stdin.on('end', () => {
-        let context = {};
-        try {
-            context = JSON.parse(inputData);
-        } catch (e) {
-            process.exit(0);
-            return;
-        }
+    // Extract a meaningful query from tool input
+    const prompt = toolInput?.prompt || toolInput?.description || toolInput?.query || '';
+    if (!prompt || prompt.length < 3) {
+        return;
+    }
 
-        const toolName = context?.tool_name || '';
-        const toolInput = context?.tool_input || {};
+    // Search ARGUS memory
+    try {
+        const argus = spawnSync('argus', ['recall', prompt, '--limit', '3', '--json'], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+            timeout: 5000,
+            shell: false,
+            encoding: 'utf-8'
+        });
 
-        // Extract a meaningful query from tool input
-        const prompt = toolInput?.prompt || toolInput?.description || toolInput?.query || '';
-        if (!prompt || prompt.length < 5) {
-            process.exit(0);
-            return;
-        }
+        if (argus.status === 0 && argus.stdout && argus.stdout.trim()) {
+            const results = JSON.parse(argus.stdout);
+            if (Array.isArray(results) && results.length > 0) {
+                // Format results for Claude
+                const output = "\n🔍 [ARGUS] Found " + results.length + " relevant memories for \"" +
+                    prompt.substring(0, 50) + "...\":\n" +
+                    results.map(r => {
+                        const summary = (r.summary || r.prompt || '').substring(0, 80);
+                        const date = new Date(r.created_at).toLocaleDateString();
+                        return "  • " + summary + "... (" + date + ")";
+                    }).join('\n');
 
-        // Search ARGUS memory
-        try {
-            const argus = spawnSync('argus', ['recall', prompt, '--limit', '3', '--json'], {
-                stdio: ['ignore', 'pipe', 'pipe'],
-                timeout: 5000,
-                shell: false,
-                encoding: 'utf-8'
-            });
-
-            if (argus.status === 0 && argus.stdout && argus.stdout.trim()) {
-                process.stderr.write(`[ARGUS] Memory context for ${toolName}:\n`);
-                process.stderr.write(argus.stdout.trim() + '\n');
+                // Return output that will be visible in conversation
+                return {
+                    permissionDecision: 'allow',
+                    permissionDecisionReason: output
+                };
             }
-        } catch (err) {
-            // Silent fail
         }
-
-        process.exit(0);
-    });
+    } catch (err) {
+        // Silent fail
+    }
 }
 
-main();
+module.exports = { preToolUse };
 "#;
 
         fs::write(self.hooks_dir.join("argus-pre-tool.cjs"), hook)

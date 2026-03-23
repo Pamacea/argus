@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.8] - 2026-03-23
+
+### ✨ Features
+
+**Rebranding - Oalacea Ecosystem:**
+- Crate renamed to `oalacea-argus` (binary remains `argus`)
+- Part of the Oalacea tooling ecosystem (with RTK, Aureus, PARRY)
+
+**Git Auto-Discovery:**
+- Added `find_git_repo()` - automatically finds nearest `.git` directory
+- Added `get_project_id()` - derives project ID from repository name
+- ARGUS now automatically detects project context without manual configuration
+
+**Enhanced Mandatory Rules:**
+- Reworked Claude Code rules with aggressive "⚠️ RÈGLE CRITIQUE" header
+- Auto-detects absolute binary path at install time for reliable execution
+- Added example output to help interpret search results
+
+**Hook Visibility Fix:**
+- PreToolUse hook now returns results via `permissionDecisionReason`
+- Search results are now visible in Claude Code conversations
+- Uses `module.exports` format instead of stdin script
+
+### 🔧 Technical Details
+
+**Added:**
+- `which` crate dependency (v7.0) for binary path detection
+- `find_git_repo()` and `get_project_id()` in `common.rs`
+
+**Changed:**
+- Hook format from stdin-reading script to `module.exports` function
+- Rules template now includes absolute binary path
+
+---
+
 ## [0.8.7] - 2026-03-18
 
 ### 🐛 Bug Fixes

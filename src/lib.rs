@@ -9,7 +9,11 @@ pub mod agent;
 pub mod hooks;
 
 // Re-export common utilities
-pub use common::{VERSION, ARGUS_DIR, DB_FILENAME, INDEX_DIR, data_dir, db_path, index_dir};
+pub use common::{
+    VERSION, ARGUS_DIR, DB_FILENAME, INDEX_DIR,
+    data_dir, db_path, index_dir,
+    find_git_repo, get_project_id,
+};
 
 // Re-export storage types for convenience
 pub use storage::{Context, Transaction, Metadata, PromptType};
