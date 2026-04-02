@@ -270,6 +270,9 @@ main();
 
 const { spawnSync } = require('child_process');
 
+// Enable debug output via ARGUS_HOOK_DEBUG=1
+const DEBUG = process.env.ARGUS_HOOK_DEBUG === '1';
+
 function preToolUse(context, toolName, toolInput) {
     // Only run for specific tools
     const targetTools = ['Explore', 'CreateTeam', 'Task', 'Agent', 'Plan'];
@@ -281,6 +284,10 @@ function preToolUse(context, toolName, toolInput) {
     const prompt = toolInput?.prompt || toolInput?.description || toolInput?.query || '';
     if (!prompt || prompt.length < 3) {
         return;
+    }
+
+    if (DEBUG) {
+        console.error('[ARGUS] Searching for:', prompt.substring(0, 50));
     }
 
     // Search ARGUS memory
@@ -304,7 +311,14 @@ function preToolUse(context, toolName, toolInput) {
                         return "  • " + summary + "... (" + date + ")";
                     }).join('\n');
 
-                // Return output that will be visible in conversation
+                // Write to stderr for visibility (may not appear in conversation)
+                console.error(output);
+
+                if (DEBUG) {
+                    console.error('[ARGUS] Found', results.length, 'memories');
+                }
+
+                // Return output that will be visible in conversation (may not work)
                 return {
                     permissionDecision: 'allow',
                     permissionDecisionReason: output
@@ -312,7 +326,14 @@ function preToolUse(context, toolName, toolInput) {
             }
         }
     } catch (err) {
+        if (DEBUG) {
+            console.error('[ARGUS] Error:', err.message);
+        }
         // Silent fail
+    }
+
+    if (DEBUG) {
+        console.error('[ARGUS] No memories found');
     }
 }
 

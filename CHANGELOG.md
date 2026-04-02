@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.9] - 2026-04-02
+
+### Fixed
+- **Hook debug output** — Added `console.error(output)` for stderr visibility
+- **Debug mode** — Enable with `ARGUS_HOOK_DEBUG=1` for troubleshooting
+- **Error messages** — Enhanced debug logging for search operations
+
+Note: PreToolUse hooks cannot display messages in Claude Code conversations.
+The `permissionDecisionReason` field is not shown to users. Stderr output
+may help with debugging but won't appear in the conversation.
+
+---
+
 ## [0.8.8] - 2026-03-23
 
 ### ✨ Features
