@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.10] - 2026-04-08
+
+### Fixed
+- **Critical: PreToolUse hook protocol** — `argus-pre-tool.cjs` now reads JSON from stdin and writes JSON to stdout using `hookSpecificOutput` format. Previously used `module.exports` pattern which was never called by Claude Code.
+- **Token cost reduction** — PreToolUse output uses `additionalContext` instead of `permissionDecisionReason`. Results limited to 2 (was 3), summaries truncated to 60 chars (was 80), compact format without emoji.
+- **Bash matcher** — PreToolUse hook now also fires on `Bash` commands (with internal filter to skip trivial commands like `ls`, `git status`, etc.).
+- **Timeout** — Reduced `spawnSync` timeout from 5000ms to 2000ms for `argus recall`.
+- **PostToolUse noise** — Expanded skip filter (added `echo`, `which`, `env`, `printenv`, `find`, `grep`, `rg`, `tree`, `bat`). Skip descriptions shorter than 20 chars.
+
+---
+
 ## [0.8.9] - 2026-04-02
 
 ### Fixed
