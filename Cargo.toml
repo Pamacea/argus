@@ -1,6 +1,6 @@
 [package]
 name = "oalacea-argus"
-version = "0.8.10"
+version = "0.9.1"
 edition = "2021"
 description = "ARGUS - Omniscient memory sentinel for Claude Code"
 authors = ["Yanis"]

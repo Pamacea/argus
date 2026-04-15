@@ -364,9 +364,20 @@ pub async fn cmd_index(_path: Option<PathBuf>, _force: bool) -> Result<()> {
 }
 
 /// Show statistics
-pub async fn cmd_stats() -> Result<()> {
+pub async fn cmd_stats(json: bool) -> Result<()> {
     let memory = MemoryEngine::new().await?;
     let stats = memory.stats().await?;
+
+    if json {
+        println!("{}", serde_json::to_string(&serde_json::json!({
+            "total_transactions": stats.total_transactions,
+            "total_size_bytes": stats.total_size_bytes,
+            "oldest_transaction": stats.oldest_transaction.map(|d| d.to_rfc3339()),
+            "newest_transaction": stats.newest_transaction.map(|d| d.to_rfc3339()),
+            "transactions_by_type": stats.transactions_by_type,
+        }))?);
+        return Ok(());
+    }
 
     println!("\n  📊 ARGUS Statistics\n");
 

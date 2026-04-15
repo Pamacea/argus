@@ -18,7 +18,7 @@ use cli::commands::*;
 /// ARGUS - Omniscient memory sentinel for Claude Code
 #[derive(Parser)]
 #[command(name = "argus")]
-#[command(version = "0.8.9")]
+#[command(version = "0.9.1")]
 #[command(about = "ARGUS maintains semantic memory of your Claude Code sessions", long_about = None)]
 #[command(author = "Yanis")]
 #[command(long_about = "ARGUS is a memory system that helps you remember past actions and \
@@ -114,7 +114,11 @@ enum Commands {
     },
 
     /// Show statistics
-    Stats,
+    Stats {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Configuration management
     Config {
@@ -381,8 +385,8 @@ async fn main() -> Result<()> {
         Commands::Index { path, force } => {
             cmd_index(path, force).await
         }
-        Commands::Stats => {
-            cmd_stats().await
+        Commands::Stats { json } => {
+            cmd_stats(json).await
         }
         Commands::Config { config_cmd } => match config_cmd {
             ConfigCommand::Get { key } => cmd_config_get(key).await,

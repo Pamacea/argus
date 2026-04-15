@@ -48,8 +48,11 @@ impl HooksInstaller {
         // Write ARGUS.md awareness
         self.write_awareness_md()?;
 
-        // Update settings.json to register hooks
+        // Update settings.json to register hooks + MCP server
         self.update_settings_json()?;
+
+        // Register MCP server in settings.json
+        self.register_mcp_server()?;
 
         println!("✓ ARGUS hooks installed successfully");
         Ok(())
@@ -84,6 +87,9 @@ impl HooksInstaller {
 
         // Remove hooks from settings.json
         self.remove_hooks_from_settings()?;
+
+        // Remove MCP server from settings.json
+        self.remove_mcp_server()?;
 
         println!("✓ ARGUS hooks removed");
         Ok(())
@@ -771,6 +777,81 @@ Toutes les données sont stockées localement :
         fs::write(&settings_path, json)?;
 
         println!("  → Removed ARGUS hooks from settings.json");
+
+        Ok(())
+    }
+
+    /// Register ARGUS MCP server in settings.json
+    fn register_mcp_server(&self) -> Result<()> {
+        let settings_path = self.claude_dir.join("settings.json");
+
+        if !settings_path.exists() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(&settings_path)?;
+        let mut settings: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Ensure mcpServers object exists
+        if !settings.get("mcpServers").and_then(|v| v.as_object()).is_some() {
+            settings["mcpServers"] = serde_json::json!({});
+        }
+
+        let mcp_obj = settings["mcpServers"].as_object_mut().unwrap();
+
+        // Detect path to MCP server (relative to argus binary or from common path)
+        let mcp_server_path = if let Ok(argus_bin) = which::which("argus") {
+            // Try to find mcp-server relative to the binary's source
+            if let Some(bin_dir) = argus_bin.parent() {
+                let candidate = bin_dir.join("..").join("Projects").join("-plugins").join("argus").join("mcp-server").join("index.js");
+                if candidate.exists() {
+                    candidate.canonicalize().unwrap_or(candidate)
+                } else {
+                    // Fallback to hardcoded path
+                    std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
+                }
+            } else {
+                std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
+            }
+        } else {
+            std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
+        };
+
+        let mcp_path_str = mcp_server_path.to_string_lossy().replace('\\', "/");
+
+        // Add or update the argus MCP server entry
+        mcp_obj.insert("argus".to_string(), serde_json::json!({
+            "command": "node",
+            "args": [mcp_path_str]
+        }));
+
+        let json = serde_json::to_string_pretty(&settings)?;
+        fs::write(&settings_path, json)?;
+
+        println!("  → Registered ARGUS MCP server in settings.json");
+
+        Ok(())
+    }
+
+    /// Remove ARGUS MCP server from settings.json
+    fn remove_mcp_server(&self) -> Result<()> {
+        let settings_path = self.claude_dir.join("settings.json");
+
+        if !settings_path.exists() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(&settings_path)?;
+        let mut settings: serde_json::Value = serde_json::from_str(&content)?;
+
+        if let Some(mcp_obj) = settings.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+            mcp_obj.remove("argus");
+        }
+
+        let json = serde_json::to_string_pretty(&settings)?;
+        fs::write(&settings_path, json)?;
+
+        println!("  → Removed ARGUS MCP server from settings.json");
 
         Ok(())
     }
