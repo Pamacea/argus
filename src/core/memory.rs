@@ -635,52 +635,6 @@ impl MemoryEngine {
         .await
         .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
     }
-
-    /// Search session summaries using FTS5
-    pub async fn search_summaries(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SessionSummary>> {
-        let conn = self.db.conn().clone();
-        let query = query.to_string();
-        let limit = limit as i64;
-
-        tokio::task::spawn_blocking(move || {
-            let conn = conn.blocking_lock();
-            let mut stmt = conn.prepare(
-                r#"
-                SELECT s.id, s.session_id, s.project_path, s.request, s.investigated,
-                       s.learned, s.completed, s.next_steps, s.notes, s.created_at
-                FROM session_summaries s
-                JOIN session_summaries_fts fts ON s.id = fts.rowid
-                WHERE session_summaries_fts MATCH ?1
-                ORDER BY s.created_at DESC
-                LIMIT ?2
-                "#,
-            ).map_err(|e| anyhow::anyhow!("Prepare error: {}", e))?;
-
-            let rows = stmt.query_map(params![query, limit], |row| {
-                Ok(SessionSummary {
-                    id: Some(row.get::<_, i64>("id")?),
-                    session_id: row.get::<_, Option<String>>("session_id")?,
-                    project_path: row.get::<_, Option<String>>("project_path")?,
-                    request: row.get::<_, Option<String>>("request")?,
-                    investigated: row.get::<_, Option<String>>("investigated")?,
-                    learned: row.get::<_, Option<String>>("learned")?,
-                    completed: row.get::<_, Option<String>>("completed")?,
-                    next_steps: row.get::<_, Option<String>>("next_steps")?,
-                    notes: row.get::<_, Option<String>>("notes")?,
-                    created_at: Some(Utc.timestamp_opt(row.get::<_, i64>("created_at")?, 0).unwrap()),
-                })
-            }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
-
-            let mut summaries = Vec::new();
-            for row in rows {
-                summaries.push(row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?);
-            }
-
-            Ok::<Vec<SessionSummary>, anyhow::Error>(summaries)
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
-    }
 }
 
 #[cfg(test)]

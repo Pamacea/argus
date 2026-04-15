@@ -1,6 +1,6 @@
 // Common utilities and constants
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Current ARGUS version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -32,6 +32,7 @@ pub fn index_dir() -> anyhow::Result<PathBuf> {
 
 /// Find the nearest .git directory by traversing up the tree
 /// Returns the path to the repository root (containing .git)
+#[allow(dead_code)]
 pub fn find_git_repo() -> anyhow::Result<PathBuf> {
     let current_dir = std::env::current_dir()?;
 
@@ -47,6 +48,7 @@ pub fn find_git_repo() -> anyhow::Result<PathBuf> {
 
 /// Get a project identifier from current directory
 /// Uses git repo path if available, otherwise current directory name
+#[allow(dead_code)]
 pub fn get_project_id() -> String {
     match find_git_repo() {
         Ok(repo_path) => {

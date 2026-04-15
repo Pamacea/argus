@@ -16,4 +16,4 @@ pub use common::{
 };
 
 // Re-export storage types for convenience
-pub use storage::{Context, Transaction, Metadata, PromptType};
+pub use storage::{Context, Transaction, PromptType};

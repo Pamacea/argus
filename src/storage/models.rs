@@ -102,6 +102,7 @@ impl ObservationType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Action => "action",
@@ -160,27 +161,8 @@ impl Transaction {
         }
     }
 
-    /// Create a new tool transaction
-    pub fn tool(prompt: impl Into<String>, context: Context) -> Self {
-        Self {
-            id: None,
-            prompt: prompt.into(),
-            prompt_type: PromptType::Tool,
-            context,
-            result: TxResult {
-                success: true,
-                output: None,
-                error: None,
-                duration_ms: None,
-                tools_used: Vec::new(),
-            },
-            metadata: None,
-            created_at: None,
-            observation_type: "action".to_string(),
-        }
-    }
-
     /// Add metadata to the transaction
+    #[allow(dead_code)]
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.metadata = Some(metadata);
         self

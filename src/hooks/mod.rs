@@ -781,77 +781,99 @@ Toutes les données sont stockées localement :
         Ok(())
     }
 
-    /// Register ARGUS MCP server in settings.json
+    /// Register ARGUS MCP server in .claude.json
+    /// Extracts embedded MCP server to ~/.argus/mcp-server/, runs npm install, and adds the entry
     fn register_mcp_server(&self) -> Result<()> {
-        let settings_path = self.claude_dir.join("settings.json");
+        let home = std::env::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+        let argus_dir = home.join(".argus");
+        let dest_mcp = argus_dir.join("mcp-server");
 
-        if !settings_path.exists() {
-            return Ok(());
-        }
+        // Extract embedded MCP server files
+        fs::create_dir_all(&dest_mcp)?;
 
-        let content = fs::read_to_string(&settings_path)?;
-        let mut settings: serde_json::Value = serde_json::from_str(&content)?;
+        const INDEX_JS: &str = include_str!("../../mcp-server/index.js");
+        const PACKAGE_JSON: &str = include_str!("../../mcp-server/package.json");
 
-        // Ensure mcpServers object exists
-        if !settings.get("mcpServers").and_then(|v| v.as_object()).is_some() {
-            settings["mcpServers"] = serde_json::json!({});
-        }
+        fs::write(dest_mcp.join("index.js"), INDEX_JS)?;
+        fs::write(dest_mcp.join("package.json"), PACKAGE_JSON)?;
+        println!("  → Extracted MCP server to {}", dest_mcp.display());
 
-        let mcp_obj = settings["mcpServers"].as_object_mut().unwrap();
+        // Run npm install
+        let npm_cmd = if cfg!(target_os = "windows") { "npm.cmd" } else { "npm" };
+        let npm_result = std::process::Command::new(npm_cmd)
+            .args(["install", "--production"])
+            .current_dir(&dest_mcp)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .status();
 
-        // Detect path to MCP server (relative to argus binary or from common path)
-        let mcp_server_path = if let Ok(argus_bin) = which::which("argus") {
-            // Try to find mcp-server relative to the binary's source
-            if let Some(bin_dir) = argus_bin.parent() {
-                let candidate = bin_dir.join("..").join("Projects").join("-plugins").join("argus").join("mcp-server").join("index.js");
-                if candidate.exists() {
-                    candidate.canonicalize().unwrap_or(candidate)
-                } else {
-                    // Fallback to hardcoded path
-                    std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
-                }
-            } else {
-                std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
+        match npm_result {
+            Ok(status) if status.success() => {
+                println!("  → Installed MCP server dependencies");
             }
-        } else {
-            std::path::PathBuf::from("C:/Users/Yanis/Projects/-plugins/argus/mcp-server/index.js")
-        };
+            Ok(_) | Err(_) => {
+                println!("  ⚠ npm install failed — run manually: cd {} && npm install", dest_mcp.display());
+            }
+        }
 
-        let mcp_path_str = mcp_server_path.to_string_lossy().replace('\\', "/");
+        // Add entry to ~/.claude.json (at the root of home, NOT inside ~/.claude/)
+        let claude_json_path = home.join(".claude.json");
+        if claude_json_path.exists() {
+            let content = fs::read_to_string(&claude_json_path)?;
+            let mut claude_json: serde_json::Value = serde_json::from_str(&content)?;
 
-        // Add or update the argus MCP server entry
-        mcp_obj.insert("argus".to_string(), serde_json::json!({
-            "command": "node",
-            "args": [mcp_path_str]
-        }));
+            if claude_json.get("mcpServers").and_then(|v| v.as_object()).is_none() {
+                claude_json["mcpServers"] = serde_json::json!({});
+            }
 
-        let json = serde_json::to_string_pretty(&settings)?;
-        fs::write(&settings_path, json)?;
+            let mcp_obj = claude_json["mcpServers"].as_object_mut().unwrap();
+            let mcp_path = dest_mcp.join("index.js")
+                .to_string_lossy()
+                .replace('\\', "/");
 
-        println!("  → Registered ARGUS MCP server in settings.json");
+            mcp_obj.insert("argus".to_string(), serde_json::json!({
+                "type": "stdio",
+                "command": "node",
+                "args": [mcp_path]
+            }));
+
+            let json = serde_json::to_string_pretty(&claude_json)?;
+            fs::write(&claude_json_path, json)?;
+            println!("  → Registered ARGUS MCP server in .claude.json");
+        }
 
         Ok(())
     }
 
-    /// Remove ARGUS MCP server from settings.json
+    /// Remove ARGUS MCP server from .claude.json + delete installed files
     fn remove_mcp_server(&self) -> Result<()> {
-        let settings_path = self.claude_dir.join("settings.json");
+        // Remove from ~/.claude.json (at the root of home, NOT inside ~/.claude/)
+        let home = std::env::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+        let claude_json_path = home.join(".claude.json");
+        if claude_json_path.exists() {
+            let content = fs::read_to_string(&claude_json_path)?;
+            let mut claude_json: serde_json::Value = serde_json::from_str(&content)?;
 
-        if !settings_path.exists() {
-            return Ok(());
+            if let Some(mcp_obj) = claude_json.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+                mcp_obj.remove("argus");
+            }
+
+            let json = serde_json::to_string_pretty(&claude_json)?;
+            fs::write(&claude_json_path, json)?;
+            println!("  → Removed ARGUS MCP server from .claude.json");
         }
 
-        let content = fs::read_to_string(&settings_path)?;
-        let mut settings: serde_json::Value = serde_json::from_str(&content)?;
-
-        if let Some(mcp_obj) = settings.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
-            mcp_obj.remove("argus");
+        // Delete ~/.argus/mcp-server/
+        let argus_dir = std::env::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?
+            .join(".argus");
+        let mcp_dir = argus_dir.join("mcp-server");
+        if mcp_dir.exists() {
+            fs::remove_dir_all(&mcp_dir)?;
+            println!("  → Removed {}", mcp_dir.display());
         }
-
-        let json = serde_json::to_string_pretty(&settings)?;
-        fs::write(&settings_path, json)?;
-
-        println!("  → Removed ARGUS MCP server from settings.json");
 
         Ok(())
     }
@@ -863,6 +885,8 @@ pub fn install_hooks() -> Result<()> {
 
     if installer.is_installed() {
         println!("✓ ARGUS hooks already installed");
+        // Always register MCP server (even if hooks already exist)
+        installer.register_mcp_server()?;
         installer.show_status()?;
         return Ok(());
     }
