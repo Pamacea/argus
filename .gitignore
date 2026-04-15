@@ -9,3 +9,5 @@ data/
 .smite/
 .ex-g-se/
 .claude/
+mcp-server/node_modules/
+mcp-server/package-lock.json

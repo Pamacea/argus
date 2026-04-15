@@ -9,7 +9,7 @@ repository = "https://github.com/Pamacea/argus"
 keywords = ["claude", "memory", "cli", "semantic-search", "code-context"]
 categories = ["development-tools", "command-line-utilities"]
 readme = "README.md"
-include = ["src/**/*.rs", "src/**/*.rs", "README.md", "LICENSE"]
+include = ["src/**/*.rs", "src/**/*.rs", "README.md", "LICENSE", "mcp-server/index.js", "mcp-server/package.json"]
 
 [lib]
 name = "oalacea_argus"
