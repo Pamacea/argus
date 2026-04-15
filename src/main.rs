@@ -65,6 +65,10 @@ enum Commands {
         /// Set category
         #[arg(short, long)]
         category: Option<String>,
+
+        /// Set observation type (gotcha, problem-solution, how-it-works, what-changed, discovery, decision, trade-off, session-request, action)
+        #[arg(short, long)]
+        r#type: Option<String>,
     },
 
     /// Recall/search past transactions
@@ -163,6 +167,92 @@ enum Commands {
         /// Output as JSON (for hook integration)
         #[arg(long)]
         json: bool,
+    },
+
+    /// Get compact context for session start injection
+    Context {
+        /// Filter by project path
+        #[arg(short, long)]
+        project: Option<String>,
+
+        /// Maximum number of entries
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Get full details of a transaction by ID
+    Get {
+        /// Transaction ID
+        id: i64,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Save a session summary
+    Summarize {
+        /// Session ID
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Project path
+        #[arg(short, long)]
+        project: Option<String>,
+
+        /// The original request
+        #[arg(short, long)]
+        request: Option<String>,
+
+        /// What was investigated
+        #[arg(long)]
+        investigated: Option<String>,
+
+        /// What was learned
+        #[arg(long)]
+        learned: Option<String>,
+
+        /// What was completed
+        #[arg(long)]
+        completed: Option<String>,
+
+        /// Next steps
+        #[arg(long)]
+        next_steps: Option<String>,
+
+        /// Additional notes
+        #[arg(long)]
+        notes: Option<String>,
+    },
+
+    /// List recent session summaries
+    Summaries {
+        /// Filter by project path
+        #[arg(short, long)]
+        project: Option<String>,
+
+        /// Maximum number of results
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Process pending queue entries
+    ProcessQueue {
+        /// Filter by session ID
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Maximum entries to process
+        #[arg(short, long, default_value = "100")]
+        limit: usize,
     },
 
     /// Unindex a project
@@ -278,8 +368,8 @@ async fn main() -> Result<()> {
         Commands::Init { global, show, uninstall, no_rules } => {
             cmd_init_v2(global, show, uninstall, no_rules).await
         }
-        Commands::Remember { description, tags, category } => {
-            cmd_remember(description, tags, category).await
+        Commands::Remember { description, tags, category, r#type } => {
+            cmd_remember(description, tags, category, r#type).await
         }
         Commands::Recall { query, limit, full, json } => {
             cmd_recall(query, limit, full, json).await
@@ -322,6 +412,21 @@ async fn main() -> Result<()> {
         }
         Commands::Complete { shell } => {
             Cli::generate_completions(shell)
+        }
+        Commands::Context { project, limit, json } => {
+            cmd_context(project, limit, json).await
+        }
+        Commands::Get { id, json } => {
+            cmd_get(id, json).await
+        }
+        Commands::Summarize { session, project, request, investigated, learned, completed, next_steps, notes } => {
+            cmd_summarize(session, project, request, investigated, learned, completed, next_steps, notes).await
+        }
+        Commands::Summaries { project, limit, json } => {
+            cmd_summaries(project, limit, json).await
+        }
+        Commands::ProcessQueue { session, limit } => {
+            cmd_process_queue(session, limit).await
         }
         Commands::Daemon { daemon_cmd } => match daemon_cmd {
             DaemonCommand::Start { background, foreground } => {

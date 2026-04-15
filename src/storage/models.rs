@@ -57,6 +57,66 @@ pub struct Metadata {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+/// Observation type for categorization (claude-mem inspired)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObservationType {
+    #[default]
+    Action,
+    Gotcha,
+    ProblemSolution,
+    HowItWorks,
+    WhatChanged,
+    Discovery,
+    Decision,
+    TradeOff,
+    SessionRequest,
+}
+
+impl ObservationType {
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            Self::Action => "⚪",
+            Self::Gotcha => "🔴",
+            Self::ProblemSolution => "🟡",
+            Self::HowItWorks => "🔵",
+            Self::WhatChanged => "🟢",
+            Self::Discovery => "🔵",
+            Self::Decision => "🟤",
+            Self::TradeOff => "⚖️",
+            Self::SessionRequest => "🎯",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "gotcha" => Self::Gotcha,
+            "problem-solution" => Self::ProblemSolution,
+            "how-it-works" => Self::HowItWorks,
+            "what-changed" => Self::WhatChanged,
+            "discovery" => Self::Discovery,
+            "decision" => Self::Decision,
+            "trade-off" => Self::TradeOff,
+            "session-request" => Self::SessionRequest,
+            _ => Self::Action,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Action => "action",
+            Self::Gotcha => "gotcha",
+            Self::ProblemSolution => "problem-solution",
+            Self::HowItWorks => "how-it-works",
+            Self::WhatChanged => "what-changed",
+            Self::Discovery => "discovery",
+            Self::Decision => "decision",
+            Self::TradeOff => "trade-off",
+            Self::SessionRequest => "session-request",
+        }
+    }
+}
+
 /// A stored transaction representing a Claude Code action
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
@@ -71,6 +131,12 @@ pub struct Transaction {
     pub metadata: Option<Metadata>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
+    #[serde(default = "default_observation_type")]
+    pub observation_type: String,
+}
+
+fn default_observation_type() -> String {
+    "action".to_string()
 }
 
 impl Transaction {
@@ -90,6 +156,7 @@ impl Transaction {
             },
             metadata: None,
             created_at: None,
+            observation_type: "action".to_string(),
         }
     }
 
@@ -109,6 +176,7 @@ impl Transaction {
             },
             metadata: None,
             created_at: None,
+            observation_type: "action".to_string(),
         }
     }
 
@@ -141,6 +209,12 @@ impl Transaction {
         self.metadata = Some(meta);
         self
     }
+
+    /// Set observation type
+    pub fn with_observation_type(mut self, obs_type: impl Into<String>) -> Self {
+        self.observation_type = obs_type.into();
+        self
+    }
 }
 
 /// Memory statistics
@@ -151,6 +225,31 @@ pub struct MemoryStats {
     pub oldest_transaction: Option<DateTime<Utc>>,
     pub newest_transaction: Option<DateTime<Utc>>,
     pub transactions_by_type: HashMap<String, i64>,
+}
+
+/// A structured session summary (claude-mem inspired)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub investigated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub learned: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_steps: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[cfg(test)]

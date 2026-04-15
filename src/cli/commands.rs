@@ -3,7 +3,7 @@
 use crate::cli::output::{success, error, cyan, green, yellow, dim};
 use anyhow::Result;
 use crate::core::{MemoryEngine, ProjectIndexer};
-use crate::storage::{Context, Transaction};
+use crate::storage::{Context, ObservationType, SessionSummary, Transaction};
 use crate::hooks;
 use chrono::{Duration, Utc};
 use std::env;
@@ -229,7 +229,7 @@ Toutes les données sont stockées localement dans `~/.argus/` :
 
 
 /// Remember a transaction
-pub async fn cmd_remember(description: String, tags: Option<String>, category: Option<String>) -> Result<()> {
+pub async fn cmd_remember(description: String, tags: Option<String>, category: Option<String>, r#type: Option<String>) -> Result<()> {
     let memory = MemoryEngine::new().await?;
 
     // Build context
@@ -260,6 +260,10 @@ pub async fn cmd_remember(description: String, tags: Option<String>, category: O
         tx = tx.with_category(cat);
     }
 
+    if let Some(obs_type) = r#type {
+        tx = tx.with_observation_type(obs_type);
+    }
+
     // Store
     let id = memory.remember(tx).await?;
 
@@ -283,6 +287,7 @@ pub async fn cmd_recall(query: String, limit: usize, full: bool, json: bool) -> 
                 "summary": tx.metadata.as_ref().and_then(|m| m.summary.clone()),
                 "tags": tx.metadata.as_ref().and_then(|m| Some(m.tags.clone())).unwrap_or_default(),
                 "category": tx.metadata.as_ref().and_then(|m| m.category.clone()),
+                "observation_type": tx.observation_type,
                 "created_at": tx.created_at.map(|d| d.to_rfc3339()),
             })
         }).collect();
@@ -580,6 +585,8 @@ pub async fn cmd_search_db(query: String, limit: usize, json: bool) -> Result<()
                 "id": r.transaction_id,
                 "prompt": r.prompt,
                 "summary": r.summary,
+                "observation_type": r.observation_type,
+                "tags": r.tags,
                 "created_at": r.created_at.format("%Y-%m-%d %H:%M").to_string(),
                 "score": r.score,
             })
@@ -641,6 +648,283 @@ pub async fn cmd_is_indexed(project_path: PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// Get compact context for session start injection
+pub async fn cmd_context(project: Option<String>, limit: usize, json: bool) -> Result<()> {
+    let memory = MemoryEngine::new().await?;
+
+    if json {
+        let transactions = if let Some(ref project_path) = project {
+            memory.list_by_project(project_path, limit).await?
+        } else {
+            memory.list(limit, 0).await?
+        };
+
+        let json_results: Vec<serde_json::Value> = transactions.iter().map(|tx| {
+            let obs = ObservationType::from_str(&tx.observation_type);
+            serde_json::json!({
+                "id": tx.id,
+                "date": tx.created_at.map(|d| d.format("%m-%d").to_string()),
+                "type": tx.observation_type,
+                "emoji": obs.emoji(),
+                "title": tx.metadata.as_ref()
+                    .and_then(|m| m.summary.as_ref())
+                    .map(|s| s.as_str())
+                    .unwrap_or(&tx.prompt),
+                "tags": tx.metadata.as_ref()
+                    .map(|m| m.tags.join(", "))
+                    .unwrap_or_default(),
+            })
+        }).collect();
+
+        println!("{}", serde_json::to_string(&json_results)?);
+        return Ok(());
+    }
+
+    let context_str = memory.recent_context(project.as_deref(), limit).await?;
+
+    if context_str.is_empty() {
+        print_info("No recent context found.");
+    } else {
+        println!("{}", context_str);
+    }
+
+    Ok(())
+}
+
+/// Get full details of a transaction by ID
+pub async fn cmd_get(id: i64, json: bool) -> Result<()> {
+    let memory = MemoryEngine::new().await?;
+
+    match memory.get(id).await? {
+        Some(tx) => {
+            if json {
+                let json_tx = serde_json::json!({
+                    "id": tx.id,
+                    "prompt": tx.prompt,
+                    "prompt_type": format!("{:?}", tx.prompt_type),
+                    "observation_type": tx.observation_type,
+                    "summary": tx.metadata.as_ref().and_then(|m| m.summary.clone()),
+                    "intent": tx.metadata.as_ref().and_then(|m| m.intent.clone()),
+                    "tags": tx.metadata.as_ref().map(|m| m.tags.clone()).unwrap_or_default(),
+                    "category": tx.metadata.as_ref().and_then(|m| m.category.clone()),
+                    "context": {
+                        "cwd": tx.context.cwd,
+                        "project_path": tx.context.project_path,
+                        "session_id": tx.context.session_id,
+                        "git_branch": tx.context.git_branch,
+                    },
+                    "result": {
+                        "success": tx.result.success,
+                        "output": tx.result.output,
+                        "error": tx.result.error,
+                    },
+                    "created_at": tx.created_at.map(|d| d.to_rfc3339()),
+                });
+                println!("{}", serde_json::to_string_pretty(&json_tx)?);
+            } else {
+                print_transaction(&tx, true);
+            }
+            Ok(())
+        }
+        None => {
+            error(&format!("Transaction #{} not found", id));
+            Ok(())
+        }
+    }
+}
+
+/// Save a session summary
+pub async fn cmd_summarize(
+    session: Option<String>,
+    project: Option<String>,
+    request: Option<String>,
+    investigated: Option<String>,
+    learned: Option<String>,
+    completed: Option<String>,
+    next_steps: Option<String>,
+    notes: Option<String>,
+) -> Result<()> {
+    let memory = MemoryEngine::new().await?;
+
+    let cwd = env::current_dir()?
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path"))?
+        .to_string();
+
+    let summary = SessionSummary {
+        id: None,
+        session_id: session,
+        project_path: project.or(Some(cwd)),
+        request,
+        investigated,
+        learned,
+        completed,
+        next_steps,
+        notes,
+        created_at: None,
+    };
+
+    let id = memory.save_summary(&summary).await?;
+    success(&format!("Saved session summary #{}", id));
+
+    Ok(())
+}
+
+/// List recent session summaries
+pub async fn cmd_summaries(project: Option<String>, limit: usize, json: bool) -> Result<()> {
+    let memory = MemoryEngine::new().await?;
+    let summaries = memory.list_summaries(project.as_deref(), limit).await?;
+
+    if summaries.is_empty() {
+        print_info("No session summaries found.");
+        return Ok(());
+    }
+
+    if json {
+        let json_results: Vec<serde_json::Value> = summaries.iter().map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "session_id": s.session_id,
+                "request": s.request,
+                "completed": s.completed,
+                "created_at": s.created_at.map(|d| d.to_rfc3339()),
+            })
+        }).collect();
+
+        println!("{}", serde_json::to_string(&json_results)?);
+        return Ok(());
+    }
+
+    for s in &summaries {
+        println!(
+            "\n  {} {}",
+            dim(&format!("#{}", s.id.unwrap_or(0))),
+            s.request.as_deref().unwrap_or("(no request)")
+        );
+        if let Some(created) = s.created_at {
+            println!("  {} {}", dim("at:"), dim(&created.format("%Y-%m-%d %H:%M").to_string()));
+        }
+        if let Some(completed) = &s.completed {
+            println!("  completed: {}", completed);
+        }
+        if let Some(next) = &s.next_steps {
+            println!("  next: {}", dim(next));
+        }
+    }
+
+    println!();
+    Ok(())
+}
+
+/// Process pending queue entries
+pub async fn cmd_process_queue(session: Option<String>, limit: usize) -> Result<()> {
+    let home = std::env::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    let queue_dir = home.join(".argus").join("queue");
+
+    if !queue_dir.exists() {
+        print_info("No queue directory found.");
+        return Ok(());
+    }
+
+    let memory = MemoryEngine::new().await?;
+    let mut processed = 0;
+
+    // Find queue files
+    let entries: Vec<_> = fs::read_dir(&queue_dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+        .collect();
+
+    for entry in entries {
+        let path = entry.path();
+
+        // Filter by session if provided
+        if let Some(ref session_id) = session {
+            let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if file_stem != session_id {
+                continue;
+            }
+        }
+
+        let content = fs::read_to_string(&path)?;
+        let mut remaining_lines = Vec::new();
+
+        for line in content.lines() {
+            if processed >= limit {
+                remaining_lines.push(line.to_string());
+                continue;
+            }
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            match serde_json::from_str::<serde_json::Value>(line) {
+                Ok(entry) => {
+                    let description = entry["description"].as_str().unwrap_or("").to_string();
+                    let category = entry["category"].as_str().map(|s| s.to_string());
+                    let obs_type = entry["type"].as_str().unwrap_or("action").to_string();
+                    let tags: Vec<String> = entry["tags"].as_array()
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        .unwrap_or_default();
+
+                    if description.is_empty() {
+                        continue;
+                    }
+
+                    let cwd = env::current_dir()?
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in path"))?
+                        .to_string();
+
+                    let context = Context {
+                        cwd: cwd.clone(),
+                        platform: std::env::consts::OS.to_string(),
+                        session_id: entry["sessionId"].as_str().map(|s| s.to_string()),
+                        project_path: Some(cwd),
+                        git_branch: None,
+                        git_commit: None,
+                    };
+
+                    let mut tx = Transaction::user(description.clone(), context)
+                        .with_summary(description)
+                        .with_observation_type(obs_type);
+
+                    if !tags.is_empty() {
+                        tx = tx.with_tags(tags);
+                    }
+
+                    if let Some(cat) = category {
+                        tx = tx.with_category(cat);
+                    }
+
+                    let id = memory.remember(tx).await?;
+                    println!("  Processed queue entry -> #{}", id);
+                    processed += 1;
+                }
+                Err(e) => {
+                    eprintln!("  Skipping malformed queue entry: {}", e);
+                }
+            }
+        }
+
+        // Write back remaining lines or delete file
+        if remaining_lines.is_empty() {
+            fs::remove_file(&path)?;
+        } else {
+            fs::write(&path, remaining_lines.join("\n") + "\n")?;
+        }
+    }
+
+    if processed == 0 {
+        print_info("No queue entries to process.");
+    } else {
+        success(&format!("Processed {} queue entries", processed));
+    }
+
+    Ok(())
+}
+
 // Helper function to avoid conflict with info macro
 fn print_info(msg: &str) {
     crate::cli::output::info(msg);
@@ -650,14 +934,17 @@ fn print_info(msg: &str) {
 
 fn print_transaction(tx: &Transaction, full: bool) {
     let id = tx.id.unwrap_or(0);
+    let obs = ObservationType::from_str(&tx.observation_type);
+    let emoji = obs.emoji();
     let summary = tx.metadata.as_ref()
         .and_then(|m| m.summary.as_ref())
         .map(|s| s.as_str())
         .unwrap_or(&tx.prompt);
 
     println!(
-        "\n  {} {}",
+        "\n  {} {} {}",
         dim(&format!("#{}", id)),
+        emoji,
         summary
     );
 
@@ -679,6 +966,7 @@ fn print_transaction(tx: &Transaction, full: bool) {
                 println!("  intent: {}", intent);
             }
         }
+        println!("  type: {}", tx.observation_type);
         println!("  prompt: {}", tx.prompt);
         if let Some(project) = &tx.context.project_path {
             println!("  project: {}", project);

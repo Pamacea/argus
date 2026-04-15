@@ -1,6 +1,6 @@
 // Memory Engine - Transaction storage and retrieval
 
-use crate::storage::{Db, Context, MemoryStats, PromptType, Transaction, TxResult};
+use crate::storage::{Db, Context, MemoryStats, ObservationType, PromptType, SessionSummary, Transaction, TxResult};
 use chrono::{DateTime, TimeZone, Utc};
 use rusqlite::params;
 
@@ -25,7 +25,7 @@ impl MemoryEngine {
     /// Remember a transaction
     pub async fn remember(&self, tx: Transaction) -> anyhow::Result<i64> {
         let conn = self.db.conn().clone();
-        let Transaction { prompt, prompt_type, context, result, metadata, created_at, .. } = tx;
+        let Transaction { prompt, prompt_type, context, result, metadata, created_at, observation_type, .. } = tx;
 
         // Extract fields before serializing
         let session_id = context.session_id.clone();
@@ -47,11 +47,11 @@ impl MemoryEngine {
             conn.execute(
                 r#"
                 INSERT INTO transactions
-                (prompt, prompt_type, summary, intent, context, result, metadata, created_at, session_id, project_path)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                (prompt, prompt_type, summary, intent, context, result, metadata, created_at, session_id, project_path, observation_type)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                 "#,
                 params![
-                    prompt, prompt_type, summary, intent, context, result, metadata, created_at, session_id, project_path,
+                    prompt, prompt_type, summary, intent, context, result, metadata, created_at, session_id, project_path, observation_type,
                 ],
             )?;
             Ok(conn.last_insert_rowid())
@@ -72,7 +72,7 @@ impl MemoryEngine {
                 r#"
                 SELECT t.id, t.prompt, t.prompt_type, t.summary, t.intent,
                        t.context, t.result, t.metadata, t.created_at,
-                       t.session_id, t.project_path
+                       t.session_id, t.project_path, t.observation_type
                 FROM transactions t
                 JOIN transactions_fts fts ON t.id = fts.rowid
                 WHERE transactions_fts MATCH ?1
@@ -94,6 +94,7 @@ impl MemoryEngine {
                     row.get::<_, i64>("created_at")?,
                     row.get::<_, Option<String>>("session_id")?,
                     row.get::<_, Option<String>>("project_path")?,
+                    row.get::<_, String>("observation_type")?,
                 ))
             }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
 
@@ -102,7 +103,7 @@ impl MemoryEngine {
                 let (
                     id, prompt, prompt_type, summary, intent,
                     context, result, metadata, created_at,
-                    session_id, project_path,
+                    session_id, project_path, observation_type,
                 ) = row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?;
 
                 let prompt_type: PromptType = serde_json::from_str(&prompt_type)?;
@@ -118,6 +119,7 @@ impl MemoryEngine {
                     result,
                     metadata,
                     created_at: Some(Utc.timestamp_opt(created_at, 0).unwrap()),
+                    observation_type,
                 };
 
                 if let Some(mut meta) = tx.metadata {
@@ -152,7 +154,7 @@ impl MemoryEngine {
                 r#"
                 SELECT id, prompt, prompt_type, summary, intent,
                        context, result, metadata, created_at,
-                       session_id, project_path
+                       session_id, project_path, observation_type
                 FROM transactions
                 WHERE id = ?1
                 "#,
@@ -171,6 +173,7 @@ impl MemoryEngine {
                     row.get::<_, i64>("created_at")?,
                     row.get::<_, Option<String>>("session_id")?,
                     row.get::<_, Option<String>>("project_path")?,
+                    row.get::<_, String>("observation_type")?,
                 ))
             }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
 
@@ -179,7 +182,7 @@ impl MemoryEngine {
                     let (
                         id, prompt, prompt_type, summary, intent,
                         context, result, metadata, created_at,
-                        session_id, project_path,
+                        session_id, project_path, observation_type,
                     ) = row;
 
                     let prompt_type: PromptType = serde_json::from_str(&prompt_type)?;
@@ -195,6 +198,7 @@ impl MemoryEngine {
                         result,
                         metadata,
                         created_at: Some(Utc.timestamp_opt(created_at, 0).unwrap()),
+                        observation_type,
                     };
 
                     if let Some(mut meta) = tx.metadata {
@@ -232,7 +236,7 @@ impl MemoryEngine {
                 r#"
                 SELECT id, prompt, prompt_type, summary, intent,
                        context, result, metadata, created_at,
-                       session_id, project_path
+                       session_id, project_path, observation_type
                 FROM transactions
                 ORDER BY created_at DESC
                 LIMIT ?1 OFFSET ?2
@@ -252,6 +256,7 @@ impl MemoryEngine {
                     row.get::<_, i64>("created_at")?,
                     row.get::<_, Option<String>>("session_id")?,
                     row.get::<_, Option<String>>("project_path")?,
+                    row.get::<_, String>("observation_type")?,
                 ))
             }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
 
@@ -260,7 +265,7 @@ impl MemoryEngine {
                 let (
                     id, prompt, prompt_type, summary, intent,
                     context, result, metadata, created_at,
-                    session_id, project_path,
+                    session_id, project_path, observation_type,
                 ) = row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?;
 
                 let prompt_type: PromptType = serde_json::from_str(&prompt_type)?;
@@ -276,6 +281,7 @@ impl MemoryEngine {
                     result,
                     metadata,
                     created_at: Some(Utc.timestamp_opt(created_at, 0).unwrap()),
+                    observation_type,
                 };
 
                 if let Some(mut meta) = tx.metadata {
@@ -388,6 +394,289 @@ impl MemoryEngine {
                 params![id],
             )?;
             Ok::<bool, anyhow::Error>(count > 0)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
+    }
+
+    /// List transactions for a specific project
+    pub async fn list_by_project(&self, project_path: &str, limit: usize) -> anyhow::Result<Vec<Transaction>> {
+        let conn = self.db.conn().clone();
+        let project_path = project_path.to_string();
+        let limit = limit as i64;
+
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.blocking_lock();
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT id, prompt, prompt_type, summary, intent,
+                       context, result, metadata, created_at,
+                       session_id, project_path, observation_type
+                FROM transactions
+                WHERE project_path = ?1
+                ORDER BY created_at DESC
+                LIMIT ?2
+                "#,
+            ).map_err(|e| anyhow::anyhow!("Prepare error: {}", e))?;
+
+            let rows = stmt.query_map(params![project_path, limit], |row| {
+                Ok((
+                    row.get::<_, i64>("id")?,
+                    row.get::<_, String>("prompt")?,
+                    row.get::<_, String>("prompt_type")?,
+                    row.get::<_, Option<String>>("summary")?,
+                    row.get::<_, Option<String>>("intent")?,
+                    row.get::<_, String>("context")?,
+                    row.get::<_, String>("result")?,
+                    row.get::<_, Option<String>>("metadata")?,
+                    row.get::<_, i64>("created_at")?,
+                    row.get::<_, Option<String>>("session_id")?,
+                    row.get::<_, Option<String>>("project_path")?,
+                    row.get::<_, String>("observation_type")?,
+                ))
+            }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
+
+            let mut transactions = Vec::new();
+            for row in rows {
+                let (
+                    id, prompt, prompt_type, summary, intent,
+                    context, result, metadata, created_at,
+                    session_id, project_path, observation_type,
+                ) = row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?;
+
+                let prompt_type: PromptType = serde_json::from_str(&prompt_type)?;
+                let context: Context = serde_json::from_str(&context)?;
+                let result: TxResult = serde_json::from_str(&result)?;
+                let metadata = metadata.and_then(|m| serde_json::from_str(&m).ok());
+
+                let mut tx = Transaction {
+                    id: Some(id),
+                    prompt,
+                    prompt_type,
+                    context,
+                    result,
+                    metadata,
+                    created_at: Some(Utc.timestamp_opt(created_at, 0).unwrap()),
+                    observation_type,
+                };
+
+                if let Some(mut meta) = tx.metadata {
+                    if summary.is_some() && meta.summary.is_none() {
+                        meta.summary = summary;
+                    }
+                    if intent.is_some() && meta.intent.is_none() {
+                        meta.intent = intent;
+                    }
+                    tx.metadata = Some(meta);
+                }
+
+                tx.context.session_id = session_id;
+                tx.context.project_path = project_path;
+
+                transactions.push(tx);
+            }
+
+            Ok::<Vec<Transaction>, anyhow::Error>(transactions)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
+    }
+
+    /// Generate a compact context index (for session start injection)
+    pub async fn recent_context(&self, project_path: Option<&str>, limit: usize) -> anyhow::Result<String> {
+        let transactions = if let Some(project) = project_path {
+            self.list_by_project(project, limit).await?
+        } else {
+            self.list(limit, 0).await?
+        };
+
+        if transactions.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut output = String::from("# [ARGUS] Recent Context\n\n");
+        output.push_str("| ID | Date | T | Title | Tags |\n");
+        output.push_str("|----|------|---|-------|------|\n");
+
+        for tx in &transactions {
+            let id = tx.id.unwrap_or(0);
+            let date = tx.created_at
+                .map(|d| d.format("%m-%d").to_string())
+                .unwrap_or_else(|| "??".to_string());
+
+            let obs = ObservationType::from_str(&tx.observation_type);
+            let emoji = obs.emoji();
+
+            let title = tx.metadata.as_ref()
+                .and_then(|m| m.summary.as_ref())
+                .map(|s| s.as_str())
+                .unwrap_or(&tx.prompt);
+            // Truncate title to 60 chars
+            let title = if title.len() > 60 {
+                format!("{}...", &title[..57])
+            } else {
+                title.to_string()
+            };
+
+            let tags = tx.metadata.as_ref()
+                .map(|m| m.tags.join(", "))
+                .unwrap_or_default();
+
+            output.push_str(&format!("| #{} | {} | {} | {} | {} |\n", id, date, emoji, title, tags));
+        }
+
+        output.push_str("\n Use `argus get <id>` for full details\n");
+
+        Ok(output)
+    }
+
+    /// Save a session summary
+    pub async fn save_summary(&self, summary: &SessionSummary) -> anyhow::Result<i64> {
+        let conn = self.db.conn().clone();
+        let session_id = summary.session_id.clone();
+        let project_path = summary.project_path.clone();
+        let request = summary.request.clone();
+        let investigated = summary.investigated.clone();
+        let learned = summary.learned.clone();
+        let completed = summary.completed.clone();
+        let next_steps = summary.next_steps.clone();
+        let notes = summary.notes.clone();
+
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.blocking_lock();
+            conn.execute(
+                r#"
+                INSERT INTO session_summaries
+                (session_id, project_path, request, investigated, learned, completed, next_steps, notes)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "#,
+                params![session_id, project_path, request, investigated, learned, completed, next_steps, notes],
+            )?;
+            Ok(conn.last_insert_rowid())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
+    }
+
+    /// List recent session summaries
+    pub async fn list_summaries(&self, project_path: Option<&str>, limit: usize) -> anyhow::Result<Vec<SessionSummary>> {
+        let conn = self.db.conn().clone();
+        let project_path = project_path.map(|s| s.to_string());
+        let limit = limit as i64;
+
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.blocking_lock();
+
+            let mut summaries = Vec::new();
+
+            if let Some(ref project) = project_path {
+                let mut stmt = conn.prepare(
+                    r#"
+                    SELECT id, session_id, project_path, request, investigated,
+                           learned, completed, next_steps, notes, created_at
+                    FROM session_summaries
+                    WHERE project_path = ?1
+                    ORDER BY created_at DESC
+                    LIMIT ?2
+                    "#,
+                ).map_err(|e| anyhow::anyhow!("Prepare error: {}", e))?;
+
+                let rows = stmt.query_map(params![project.as_str(), limit], |row| {
+                    Ok(SessionSummary {
+                        id: Some(row.get::<_, i64>("id")?),
+                        session_id: row.get::<_, Option<String>>("session_id")?,
+                        project_path: row.get::<_, Option<String>>("project_path")?,
+                        request: row.get::<_, Option<String>>("request")?,
+                        investigated: row.get::<_, Option<String>>("investigated")?,
+                        learned: row.get::<_, Option<String>>("learned")?,
+                        completed: row.get::<_, Option<String>>("completed")?,
+                        next_steps: row.get::<_, Option<String>>("next_steps")?,
+                        notes: row.get::<_, Option<String>>("notes")?,
+                        created_at: Some(Utc.timestamp_opt(row.get::<_, i64>("created_at")?, 0).unwrap()),
+                    })
+                }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
+
+                for row in rows {
+                    summaries.push(row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?);
+                }
+            } else {
+                let mut stmt = conn.prepare(
+                    r#"
+                    SELECT id, session_id, project_path, request, investigated,
+                           learned, completed, next_steps, notes, created_at
+                    FROM session_summaries
+                    ORDER BY created_at DESC
+                    LIMIT ?1
+                    "#,
+                ).map_err(|e| anyhow::anyhow!("Prepare error: {}", e))?;
+
+                let rows = stmt.query_map(params![limit], |row| {
+                    Ok(SessionSummary {
+                        id: Some(row.get::<_, i64>("id")?),
+                        session_id: row.get::<_, Option<String>>("session_id")?,
+                        project_path: row.get::<_, Option<String>>("project_path")?,
+                        request: row.get::<_, Option<String>>("request")?,
+                        investigated: row.get::<_, Option<String>>("investigated")?,
+                        learned: row.get::<_, Option<String>>("learned")?,
+                        completed: row.get::<_, Option<String>>("completed")?,
+                        next_steps: row.get::<_, Option<String>>("next_steps")?,
+                        notes: row.get::<_, Option<String>>("notes")?,
+                        created_at: Some(Utc.timestamp_opt(row.get::<_, i64>("created_at")?, 0).unwrap()),
+                    })
+                }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
+
+                for row in rows {
+                    summaries.push(row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?);
+                }
+            }
+
+            Ok::<Vec<SessionSummary>, anyhow::Error>(summaries)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?
+    }
+
+    /// Search session summaries using FTS5
+    pub async fn search_summaries(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SessionSummary>> {
+        let conn = self.db.conn().clone();
+        let query = query.to_string();
+        let limit = limit as i64;
+
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.blocking_lock();
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT s.id, s.session_id, s.project_path, s.request, s.investigated,
+                       s.learned, s.completed, s.next_steps, s.notes, s.created_at
+                FROM session_summaries s
+                JOIN session_summaries_fts fts ON s.id = fts.rowid
+                WHERE session_summaries_fts MATCH ?1
+                ORDER BY s.created_at DESC
+                LIMIT ?2
+                "#,
+            ).map_err(|e| anyhow::anyhow!("Prepare error: {}", e))?;
+
+            let rows = stmt.query_map(params![query, limit], |row| {
+                Ok(SessionSummary {
+                    id: Some(row.get::<_, i64>("id")?),
+                    session_id: row.get::<_, Option<String>>("session_id")?,
+                    project_path: row.get::<_, Option<String>>("project_path")?,
+                    request: row.get::<_, Option<String>>("request")?,
+                    investigated: row.get::<_, Option<String>>("investigated")?,
+                    learned: row.get::<_, Option<String>>("learned")?,
+                    completed: row.get::<_, Option<String>>("completed")?,
+                    next_steps: row.get::<_, Option<String>>("next_steps")?,
+                    notes: row.get::<_, Option<String>>("notes")?,
+                    created_at: Some(Utc.timestamp_opt(row.get::<_, i64>("created_at")?, 0).unwrap()),
+                })
+            }).map_err(|e| anyhow::anyhow!("Query map error: {}", e))?;
+
+            let mut summaries = Vec::new();
+            for row in rows {
+                summaries.push(row.map_err(|e| anyhow::anyhow!("Row error: {}", e))?);
+            }
+
+            Ok::<Vec<SessionSummary>, anyhow::Error>(summaries)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Spawn blocking error: {}", e))?

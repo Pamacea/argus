@@ -6,4 +6,4 @@ pub mod models;
 
 pub use db::Db;
 pub use error::StorageError;
-pub use models::{Context, Metadata, MemoryStats, PromptType, Transaction, TxResult};
+pub use models::{Context, Metadata, MemoryStats, ObservationType, PromptType, SessionSummary, Transaction, TxResult};

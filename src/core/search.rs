@@ -12,6 +12,8 @@ pub struct SearchResult {
     pub transaction_id: i64,
     pub prompt: String,
     pub summary: Option<String>,
+    pub observation_type: String,
+    pub tags: Vec<String>,
     pub score: f64,
     pub created_at: DateTime<chrono::Utc>,
 }
@@ -33,17 +35,17 @@ impl SearchEngine {
     /// Search transactions using FTS5
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         let conn = self.db.conn().clone();
-        let query = query.to_string(); // Clone to own the data
+        let query = query.to_string();
 
         let results = tokio::task::spawn_blocking(move || {
             let conn = conn.blocking_lock();
 
-            // Use FTS5 search with ranking
-            // Note: metadata is stored as JSON in the transactions table
             let sql = format!(
                 "SELECT
                     t.id, t.prompt, t.created_at,
                     json_extract(t.metadata, '$.summary') AS summary,
+                    COALESCE(t.observation_type, 'action') AS observation_type,
+                    json_extract(t.metadata, '$.tags') AS tags,
                     bm25(transactions_fts) AS score
                 FROM transactions_fts fts
                 JOIN transactions t ON t.id = fts.rowid
@@ -59,18 +61,23 @@ impl SearchEngine {
             let mut rows = stmt.query(params![query, limit as i64])?;
 
             while let Some(row) = rows.next()? {
-                // summary can be NULL (from json_extract), read as Option<String>
                 let summary: Option<String> = row.get(3)?;
-                // created_at is stored as i64 (Unix timestamp)
                 let created_ts: i64 = row.get(2)?;
                 let created_at = chrono::Utc.timestamp_opt(created_ts, 0).unwrap();
+                let observation_type: String = row.get(4)?;
+                let tags_str: Option<String> = row.get(5)?;
+                let tags: Vec<String> = tags_str
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+                    .unwrap_or_default();
 
                 results.push(SearchResult {
                     transaction_id: row.get(0)?,
                     prompt: row.get(1)?,
                     created_at,
                     summary,
-                    score: row.get(4)?,
+                    observation_type,
+                    tags,
+                    score: row.get(6)?,
                 });
             }
 

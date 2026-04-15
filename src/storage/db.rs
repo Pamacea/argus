@@ -86,10 +86,14 @@ impl Db {
             )"
         )?;
 
+        // Add observation_type column (migration-safe)
+        let _ = exec_ddl(conn, "ALTER TABLE transactions ADD COLUMN observation_type TEXT DEFAULT 'action'");
+
         // Create indexes - ignore all errors
         let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at DESC)");
         let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_transactions_session ON transactions(session_id)");
         let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_transactions_project ON transactions(project_path)");
+        let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(observation_type)");
 
         // Try FTS5 - optional
         let _ = exec_ddl(conn, "CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(prompt, summary, intent, content=transactions, content_rowid=id)");
@@ -105,6 +109,40 @@ impl Db {
             "CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
                 INSERT INTO transactions_fts(transactions_fts, rowid, prompt, summary, intent)
                 VALUES ('delete', old.id, old.prompt, old.summary, old.intent);
+            END"
+        );
+
+        // Session summaries table (claude-mem inspired)
+        exec_ddl(conn,
+            "CREATE TABLE IF NOT EXISTS session_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT,
+                project_path TEXT,
+                request TEXT,
+                investigated TEXT,
+                learned TEXT,
+                completed TEXT,
+                next_steps TEXT,
+                notes TEXT,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            )"
+        )?;
+
+        let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_summaries_project ON session_summaries(project_path)");
+        let _ = exec_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_summaries_created ON session_summaries(created_at DESC)");
+
+        // FTS5 for session summaries
+        let _ = exec_ddl(conn, "CREATE VIRTUAL TABLE IF NOT EXISTS session_summaries_fts USING fts5(request, investigated, learned, completed, next_steps, notes, content=session_summaries, content_rowid=id)");
+        let _ = exec_ddl(conn,
+            "CREATE TRIGGER IF NOT EXISTS session_summaries_ai AFTER INSERT ON session_summaries BEGIN
+                INSERT INTO session_summaries_fts(rowid, request, investigated, learned, completed, next_steps, notes)
+                VALUES (new.id, new.request, new.investigated, new.learned, new.completed, new.next_steps, new.notes);
+            END"
+        );
+        let _ = exec_ddl(conn,
+            "CREATE TRIGGER IF NOT EXISTS session_summaries_ad AFTER DELETE ON session_summaries BEGIN
+                INSERT INTO session_summaries_fts(session_summaries_fts, rowid, request, investigated, learned, completed, next_steps, notes)
+                VALUES ('delete', old.id, old.request, old.investigated, old.learned, old.completed, old.next_steps, old.notes);
             END"
         );
 

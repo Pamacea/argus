@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * ARGUS PostToolUse Hook
- * Records successful actions to ARGUS memory
- *
- * Claude Code hooks receive JSON on stdin:
- * { "session_id", "tool_name", "tool_input", "tool_output", "working_directory" }
+ * ARGUS PostToolUse Hook (v0.9.0)
+ * Writes actions to async queue instead of synchronous CLI calls
+ * Queue is processed at SessionEnd via argus process-queue
  */
 
-const { spawnSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 function main() {
     let inputData = '';
@@ -25,11 +25,13 @@ function main() {
 
         const toolName = context?.tool_name || '';
         const toolInput = context?.tool_input || {};
+        const sessionId = context?.session_id || 'unknown';
 
         // Build description based on tool
         let description = '';
         let category = 'action';
         let tags = [];
+        let type = 'action';
 
         switch (toolName) {
             case 'Edit':
@@ -71,25 +73,36 @@ function main() {
             return;
         }
 
-        // Auto-detect tags from description
+        // Auto-detect observation type from description
         const descLower = description.toLowerCase();
-        if (descLower.includes('fix') || descLower.includes('bug')) tags.push('bugfix');
+        if (descLower.includes('fix') || descLower.includes('bug') || descLower.includes('error')) {
+            type = 'problem-solution';
+            tags.push('bugfix');
+        } else if (descLower.includes('decide') || descLower.includes('chose') || descLower.includes('selected')) {
+            type = 'decision';
+        } else if (descLower.includes('discover') || descLower.includes('found') || descLower.includes('learned')) {
+            type = 'discovery';
+        }
         if (descLower.includes('test')) tags.push('test');
 
-        // Save to ARGUS
+        // Write to queue file (async JSONL)
         try {
-            const args = ['remember', description, '--category', category];
-            if (tags.length > 0) {
-                args.push('--tags', tags.join(','));
-            }
+            const queueDir = path.join(os.homedir(), '.argus', 'queue');
+            fs.mkdirSync(queueDir, { recursive: true });
 
-            spawnSync('argus', args, {
-                stdio: 'ignore',
-                shell: false,
-                timeout: 5000
-            });
+            const queueFile = path.join(queueDir, `${sessionId}.jsonl`);
+            const queueEntry = {
+                description,
+                category,
+                type,
+                tags,
+                timestamp: Date.now(),
+                sessionId
+            };
+
+            fs.appendFileSync(queueFile, JSON.stringify(queueEntry) + '\n');
         } catch (err) {
-            // Silent fail
+            // Silent fail — queue write failed
         }
 
         process.exit(0);

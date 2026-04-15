@@ -43,6 +43,7 @@ impl HooksInstaller {
         self.write_session_hook()?;
         self.write_pre_tool_hook()?;
         self.write_post_tool_hook()?;
+        self.write_session_end_hook()?;
 
         // Write ARGUS.md awareness
         self.write_awareness_md()?;
@@ -63,6 +64,7 @@ impl HooksInstaller {
             "argus-session.cjs",
             "argus-pre-tool.cjs",
             "argus-post-tool.cjs",
+            "argus-session-end.cjs",
         ];
 
         for hook in hooks_to_remove {
@@ -97,9 +99,10 @@ impl HooksInstaller {
         println!("\n  📊 ARGUS Installation Status\n");
 
         let hooks = vec![
-            ("argus-session.cjs", "SessionStart hook"),
+            ("argus-session.cjs", "SessionStart hook (context injection)"),
             ("argus-pre-tool.cjs", "PreToolUse hook"),
-            ("argus-post-tool.cjs", "PostToolUse hook"),
+            ("argus-post-tool.cjs", "PostToolUse hook (queue async)"),
+            ("argus-session-end.cjs", "SessionEnd hook (process queue)"),
         ];
 
         for (file, description) in hooks {
@@ -165,14 +168,14 @@ impl HooksInstaller {
         Ok(false)
     }
 
-    /// Write session-start hook
+    /// Write session-start hook (v0.9.0 with context injection)
     fn write_session_hook(&self) -> Result<()> {
         let hook = r#"#!/usr/bin/env node
 /**
- * ARGUS SessionStart Hook
- * Initializes ARGUS at the start of each Claude Code session
+ * ARGUS SessionStart Hook (v0.9.0)
+ * Injects context from past sessions + auto-indexes project
  *
- * Claude Code hooks receive JSON on stdin and output on stdout.
+ * Outputs hookSpecificOutput.additionalContext for Claude Code
  */
 
 const { spawnSync, spawn } = require('child_process');
@@ -189,7 +192,7 @@ function main() {
         try {
             context = JSON.parse(inputData);
         } catch (e) {
-            // No context provided, that's OK for SessionStart
+            // No context provided
         }
 
         const workingDir = context?.working_directory || process.cwd();
@@ -236,6 +239,31 @@ function main() {
             }
         } catch (err) {
             // Silent fail
+        }
+
+        // Context injection — get compact index of recent observations
+        try {
+            const contextResult = spawnSync('argus', [
+                'context',
+                '--project', workingDir,
+                '--limit', '20'
+            ], {
+                encoding: 'utf8',
+                timeout: 10000,
+                shell: false
+            });
+
+            if (contextResult.status === 0 && contextResult.stdout && contextResult.stdout.trim().length > 20) {
+                const output = JSON.stringify({
+                    hookSpecificOutput: {
+                        hookEventName: 'SessionStart',
+                        additionalContext: contextResult.stdout.trim()
+                    }
+                });
+                process.stdout.write(output + '\n');
+            }
+        } catch (err) {
+            // Context injection failed silently — not critical
         }
 
         process.exit(0);
@@ -356,18 +384,18 @@ module.exports = { preToolUse };
         Ok(())
     }
 
-    /// Write post-tool-use hook
+    /// Write post-tool-use hook (v0.9.0 with async queue)
     fn write_post_tool_hook(&self) -> Result<()> {
         let hook = r#"#!/usr/bin/env node
 /**
- * ARGUS PostToolUse Hook
- * Records successful actions to ARGUS memory
- *
- * Claude Code hooks receive JSON on stdin:
- * { "session_id", "tool_name", "tool_input", "tool_output", "working_directory" }
+ * ARGUS PostToolUse Hook (v0.9.0)
+ * Writes actions to async queue instead of synchronous CLI calls
+ * Queue is processed at SessionEnd via argus process-queue
  */
 
-const { spawnSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 function main() {
     let inputData = '';
@@ -385,11 +413,13 @@ function main() {
 
         const toolName = context?.tool_name || '';
         const toolInput = context?.tool_input || {};
+        const sessionId = context?.session_id || 'unknown';
 
         // Build description based on tool
         let description = '';
         let category = 'action';
         let tags = [];
+        let type = 'action';
 
         switch (toolName) {
             case 'Edit':
@@ -412,8 +442,8 @@ function main() {
                 break;
             case 'Bash': {
                 const cmd = toolInput?.command || '';
-                // Skip noisy/read-only commands
-                if (/^(git status|git log|git diff|ls|dir|pwd|rtk |cat |head |tail |argus )/.test(cmd)) {
+                // Skip noisy/read-only/trivial commands
+                if (/^(git status|git log|git diff|ls|dir|pwd|rtk |cat |head |tail |argus |echo |which |env |printenv|find |grep |rg |tree |bat )/.test(cmd)) {
                     process.exit(0);
                     return;
                 }
@@ -426,30 +456,41 @@ function main() {
                 return;
         }
 
-        if (!description) {
+        if (!description || description.length < 20) {
             process.exit(0);
             return;
         }
 
-        // Auto-detect tags from description
+        // Auto-detect observation type from description
         const descLower = description.toLowerCase();
-        if (descLower.includes('fix') || descLower.includes('bug')) tags.push('bugfix');
+        if (descLower.includes('fix') || descLower.includes('bug') || descLower.includes('error')) {
+            type = 'problem-solution';
+            tags.push('bugfix');
+        } else if (descLower.includes('decide') || descLower.includes('chose') || descLower.includes('selected')) {
+            type = 'decision';
+        } else if (descLower.includes('discover') || descLower.includes('found') || descLower.includes('learned')) {
+            type = 'discovery';
+        }
         if (descLower.includes('test')) tags.push('test');
 
-        // Save to ARGUS
+        // Write to queue file (async JSONL)
         try {
-            const args = ['remember', description, '--category', category];
-            if (tags.length > 0) {
-                args.push('--tags', tags.join(','));
-            }
+            const queueDir = path.join(os.homedir(), '.argus', 'queue');
+            fs.mkdirSync(queueDir, { recursive: true });
 
-            spawnSync('argus', args, {
-                stdio: 'ignore',
-                shell: false,
-                timeout: 5000
-            });
+            const queueFile = path.join(queueDir, `${sessionId}.jsonl`);
+            const queueEntry = {
+                description,
+                category,
+                type,
+                tags,
+                timestamp: Date.now(),
+                sessionId
+            };
+
+            fs.appendFileSync(queueFile, JSON.stringify(queueEntry) + '\n');
         } catch (err) {
-            // Silent fail
+            // Silent fail — queue write failed
         }
 
         process.exit(0);
@@ -475,6 +516,71 @@ main();
         Ok(())
     }
 
+    /// Write session-end hook (v0.9.0 — processes queue)
+    fn write_session_end_hook(&self) -> Result<()> {
+        let hook = r#"#!/usr/bin/env node
+/**
+ * ARGUS SessionEnd Hook (v0.9.0)
+ * Processes the async queue at session end
+ * Calls argus process-queue to flush pending entries to the database
+ */
+
+const { spawnSync } = require('child_process');
+
+function main() {
+    let inputData = '';
+
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { inputData += chunk; });
+    process.stdin.on('end', () => {
+        let context = {};
+        try {
+            context = JSON.parse(inputData);
+        } catch (e) {
+            // No context provided
+        }
+
+        const sessionId = context?.session_id;
+
+        // Process queue
+        try {
+            const args = ['process-queue', '--limit', '100'];
+            if (sessionId) {
+                args.push('--session', sessionId);
+            }
+
+            spawnSync('argus', args, {
+                stdio: 'ignore',
+                shell: false,
+                timeout: 15000
+            });
+        } catch (err) {
+            // Silent fail
+        }
+
+        process.exit(0);
+    });
+}
+
+main();
+"#;
+
+        fs::write(self.hooks_dir.join("argus-session-end.cjs"), hook)
+            .context("Failed to write argus-session-end.cjs")?;
+
+        // Make executable on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let path = self.hooks_dir.join("argus-session-end.cjs");
+            let mut perms = fs::metadata(&path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms)?;
+        }
+
+        Ok(())
+    }
+
     /// Write ARGUS.md awareness file (like RTK.md)
     fn write_awareness_md(&self) -> Result<()> {
         let awareness = r#"# ARGUS - Sentinelle Omnisciente
@@ -486,6 +592,9 @@ main();
 ```bash
 argus recall "pattern"      # Rechercher mémoire
 argus remember "desc"       # Sauver en mémoire
+argus context               # Contexte compact (session start)
+argus get <id>              # Détails transaction
+argus summarize             # Sauver résumé session
 argus index                 # Indexer projet
 argus stats                 # Statistiques
 ```
@@ -500,20 +609,23 @@ argus stats        # Doit afficher les stats
 ## Hook-Based Usage
 
 Les hooks ARGUS s'exécutent automatiquement :
-- **SessionStart** → Initialise ARGUS, auto-indexe
+- **SessionStart** → Injecte contexte des sessions passées + auto-indexe
 - **PreToolUse** → Consulte mémoire avant Explore/CreateTeam
-- **PostToolUse** → Enregistre les actions automatiquement
+- **PostToolUse** → Écrit dans queue async (JSONL)
+- **SessionEnd** → Traite la queue → DB
 
 ## Workflow
 
-1. Avant d'explorer → Les hooks consultent ARGUS automatiquement
-2. Pendant le travail → Les hooks enregistrent automatiquement
-3. Rechercher manuel → `argus recall "pattern"`
+1. Session démarre → ARGUS injecte les 20 dernières observations
+2. Avant d'explorer → Les hooks consultent ARGUS automatiquement
+3. Pendant le travail → Les hooks écrivent dans la queue
+4. Session finit → Queue traitée automatiquement
 
 ## Data Storage
 
 Toutes les données sont stockées localement :
 - `~/.argus/memory.db` → Base de données SQLite
+- `~/.argus/queue/` → Queue async (JSONL)
 - `~/.argus/index/` → Index de fichiers
 
 ---
@@ -586,6 +698,14 @@ Toutes les données sont stockées localement :
                     "type": "command",
                     "command": format!("node {}/argus-post-tool.cjs", hooks_dir_str),
                     "timeout": 5000
+                }]
+            })),
+            ("SessionEnd", serde_json::json!({
+                "matcher": "*",
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("node {}/argus-session-end.cjs", hooks_dir_str),
+                    "timeout": 15000
                 }]
             })),
         ];
